@@ -1,0 +1,16 @@
+[package]
+name = "tf2-bot-kicker-gui"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+eframe = "0.15.0" # Gives us egui, epi and web+native backends
+
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0.73"
+
+chrono = "0.4.19"
+rfd = "0.6.3"
+clipboard = "0.5.0"
