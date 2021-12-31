@@ -1,28 +1,42 @@
 use std::{time::SystemTime, fs::read_dir};
 
-use chrono::{DateTime, Utc, Local};
+use chrono::{Local, DateTime};
 use clipboard::{ClipboardProvider, ClipboardContext};
-use eframe::{egui::{self, Ui}, epi};
+use eframe::{egui::{self, Ui, Color32}, epi};
 
 pub mod timer;
+use regex::Regex;
 use timer::*;
 
 pub mod settings;
 use settings::*;
 
-pub mod log_watcher;
-use log_watcher::*;
+pub mod server;
+use server::*;
+
+pub mod console;
+use console::*;
+
+mod regexes;
+use self::{regexes::*, server::player::{Team, Player, State}};
+
+pub mod bot_checker;
+use bot_checker::*;
+
+use self::{console::{commander::Commander, log_watcher::LogWatcher}, regexes::LogMatcher};
 
 pub struct TemplateApp {
 
     timer: Timer,
-    settings: Settings,
-
     message: String,
-
-    console: Option<LogWatcher>,
-
     paused: bool,
+
+    settings: Settings,
+    console: Option<Console>,
+
+    server: Server,
+    regexes: Vec<LogMatcher>,
+    bot_checker: BotChecker,
 
 }
 
@@ -31,7 +45,7 @@ impl Default for TemplateApp {
 
         let settings: Settings;
 
-        let set = Settings::import("settings.json");
+        let set = Settings::import("cfg/settings.json");
         if set.is_err() {
             settings = Settings::new();
         } else {
@@ -40,15 +54,26 @@ impl Default for TemplateApp {
 
         let console = use_directory(&settings.directory);
 
+        let reg = vec![
+            LogMatcher::new(Regex::new(r_status).unwrap(), f_status),
+            LogMatcher::new(Regex::new(r_lobby).unwrap(), f_lobby),
+            LogMatcher::new(Regex::new(r_user_connect).unwrap(), f_user_connect),
+            LogMatcher::new(Regex::new(r_user_disconnect).unwrap(), f_user_disconnect),
+            LogMatcher::new(Regex::new(r_list_players).unwrap(), f_list_players),
+            LogMatcher::new(Regex::new(r_update).unwrap(), f_update),
+            LogMatcher::new(Regex::new(r_inactive).unwrap(), f_inactive),
+            LogMatcher::new(Regex::new(r_refresh_complete).unwrap(), f_refresh_complete),
+        ];
+
         Self {
             timer: Timer::new(),
             settings,
-
             message: String::from("Loaded..."),
-
             console,
-
             paused: true,
+            server: Server::new(),
+            regexes: reg,
+            bot_checker: BotChecker::new(),
         }
     }
 }
@@ -62,7 +87,7 @@ impl epi::App for TemplateApp {
     fn setup(
         &mut self,
         _ctx: &egui::CtxRef,
-        _frame: &mut epi::Frame<'_>,
+        _frame: &eframe::epi::Frame,
         _storage: Option<&dyn epi::Storage>,
     ) {
 
@@ -70,7 +95,7 @@ impl epi::App for TemplateApp {
 
     }
 
-    fn update(&mut self, ctx: &egui::CtxRef, frame: &mut epi::Frame<'_>) {
+    fn update(&mut self, ctx: &egui::CtxRef, frame: &eframe::epi::Frame) {
         // Ensures update is called again as soon as this one is finished.
         ctx.request_repaint();
 
@@ -78,12 +103,40 @@ impl epi::App for TemplateApp {
         let t = self.timer.go(self.settings.period);
         if t.is_none() {return;}
 
-        if self.timer.update() && !self.paused {
+        // Update
+        if self.timer.update() && !self.paused && self.console.is_some() {
             let system_time = SystemTime::now();
             let datetime: DateTime<Local> = system_time.into();
-            self.message = format!("Refreshing... ({})", datetime.format("%T"));
 
+            match &mut self.console {
+                Some(con) => {
+                    self.server.refresh(&self.settings, &mut con.com);
+                    self.message = format!("Refreshing... ({})", datetime.format("%T"));
+                },
+                None => {}
+            }
 
+        }
+
+        match &mut self.console {
+            Some(con) => {
+                loop {
+                    match con.log.next_line() {
+                        Some(line) => {
+                            for r in self.regexes.iter() {
+                                match r.r.captures(&line) {
+                                    None => {}
+                                    Some(c) => {
+                                        (r.f)(&mut self.server, &line, c, &self.settings, &mut con.com, &mut self.paused, &mut self.bot_checker);
+                                    }
+                                }
+                            }
+                        },
+                        None => {break;}
+                    }
+                }
+            },
+            None => {}
         }
 
         // Tracks if the settings need to be saved
@@ -91,8 +144,9 @@ impl epi::App for TemplateApp {
 
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             // The top panel is often a good place for a menu bar:
+            
             egui::menu::bar(ui, |ui| {
-                egui::menu::menu(ui, "File", |ui| {
+                ui.menu_button("File", |ui| {
 
                     if ui.button("Set TF2 Directory").clicked() {
                         match rfd::FileDialog::new().pick_folder() {
@@ -100,6 +154,7 @@ impl epi::App for TemplateApp {
                                 let dir = pb.to_string_lossy().to_string();
                                 self.settings.directory = dir;
                                 self.console = use_directory(&self.settings.directory);
+                                settings_changed = true;
                             },
                             None => {}
                         }
@@ -134,6 +189,72 @@ impl epi::App for TemplateApp {
                 settings_changed |= ui.add(egui::Slider::new(&mut self.settings.period, 1.0..=60.0)).changed();
             });
 
+            // Command Key
+            ui.horizontal(|ui| {
+                ui.label(&format!("Command key: {}", key_to_str(self.settings.key)));
+                ui.menu_button("Change", |ui| {
+
+                    egui::ScrollArea::vertical().show(ui, |ui| {
+
+                        if ui.button("F1").clicked() {self.settings.key = str_to_key("F1"); settings_changed = true;}
+                        if ui.button("F2").clicked() {self.settings.key = str_to_key("F2"); settings_changed = true;}
+                        if ui.button("F3").clicked() {self.settings.key = str_to_key("F3"); settings_changed = true;}
+                        if ui.button("F4").clicked() {self.settings.key = str_to_key("F4"); settings_changed = true;}
+                        if ui.button("F5").clicked() {self.settings.key = str_to_key("F5"); settings_changed = true;}
+                        if ui.button("F6").clicked() {self.settings.key = str_to_key("F6"); settings_changed = true;}
+                        if ui.button("F7").clicked() {self.settings.key = str_to_key("F7"); settings_changed = true;}
+                        if ui.button("F8").clicked() {self.settings.key = str_to_key("F8"); settings_changed = true;}
+                        if ui.button("F9").clicked() {self.settings.key = str_to_key("F9"); settings_changed = true;}
+                        if ui.button("F10").clicked() {self.settings.key = str_to_key("F10"); settings_changed = true;}
+                        if ui.button("F11").clicked() {self.settings.key = str_to_key("F11"); settings_changed = true;}
+                        if ui.button("F12").clicked() {self.settings.key = str_to_key("F12"); settings_changed = true;}
+                        if ui.button("kp_ins").clicked() {self.settings.key = str_to_key("kp_ins"); settings_changed = true;}
+                        if ui.button("kp_end").clicked() {self.settings.key = str_to_key("kp_end"); settings_changed = true;}
+                        if ui.button("kp_downarrow").clicked() {self.settings.key = str_to_key("kp_downarrow"); settings_changed = true;}
+                        if ui.button("kp_pgdn").clicked() {self.settings.key = str_to_key("kp_pgdn"); settings_changed = true;}
+                        if ui.button("kp_leftarrow").clicked() {self.settings.key = str_to_key("kp_leftarrow"); settings_changed = true;}
+                        if ui.button("kp_5").clicked() {self.settings.key = str_to_key("kp_5"); settings_changed = true;}
+                        if ui.button("kp_rightarrow").clicked() {self.settings.key = str_to_key("kp_rightarrow"); settings_changed = true;}
+                        if ui.button("kp_home").clicked() {self.settings.key = str_to_key("kp_home"); settings_changed = true;}
+                        if ui.button("kp_uparrow").clicked() {self.settings.key = str_to_key("kp_uparrow"); settings_changed = true;}
+                        if ui.button("kp_pgup").clicked() {self.settings.key = str_to_key("kp_pgup"); settings_changed = true;}
+                        if ui.button("numlock").clicked() {self.settings.key = str_to_key("numlock"); settings_changed = true;}
+                        if ui.button("scrolllock").clicked() {self.settings.key = str_to_key("scrolllock"); settings_changed = true;}
+                        if ui.button("capslock").clicked() {self.settings.key = str_to_key("capslock"); settings_changed = true;}
+                        if ui.button("shift").clicked() {self.settings.key = str_to_key("shift"); settings_changed = true;}
+                        if ui.button("A").clicked() {self.settings.key = str_to_key("A"); settings_changed = true;}
+                        if ui.button("B").clicked() {self.settings.key = str_to_key("B"); settings_changed = true;}
+                        if ui.button("C").clicked() {self.settings.key = str_to_key("C"); settings_changed = true;}
+                        if ui.button("D").clicked() {self.settings.key = str_to_key("D"); settings_changed = true;}
+                        if ui.button("E").clicked() {self.settings.key = str_to_key("E"); settings_changed = true;}
+                        if ui.button("F").clicked() {self.settings.key = str_to_key("F"); settings_changed = true;}
+                        if ui.button("G").clicked() {self.settings.key = str_to_key("G"); settings_changed = true;}
+                        if ui.button("H").clicked() {self.settings.key = str_to_key("H"); settings_changed = true;}
+                        if ui.button("I").clicked() {self.settings.key = str_to_key("I"); settings_changed = true;}
+                        if ui.button("J").clicked() {self.settings.key = str_to_key("J"); settings_changed = true;}
+                        if ui.button("K").clicked() {self.settings.key = str_to_key("K"); settings_changed = true;}
+                        if ui.button("L").clicked() {self.settings.key = str_to_key("L"); settings_changed = true;}
+                        if ui.button("M").clicked() {self.settings.key = str_to_key("M"); settings_changed = true;}
+                        if ui.button("N").clicked() {self.settings.key = str_to_key("N"); settings_changed = true;}
+                        if ui.button("O").clicked() {self.settings.key = str_to_key("O"); settings_changed = true;}
+                        if ui.button("P").clicked() {self.settings.key = str_to_key("P"); settings_changed = true;}
+                        if ui.button("Q").clicked() {self.settings.key = str_to_key("Q"); settings_changed = true;}
+                        if ui.button("R").clicked() {self.settings.key = str_to_key("R"); settings_changed = true;}
+                        if ui.button("S").clicked() {self.settings.key = str_to_key("S"); settings_changed = true;}
+                        if ui.button("T").clicked() {self.settings.key = str_to_key("T"); settings_changed = true;}
+                        if ui.button("U").clicked() {self.settings.key = str_to_key("U"); settings_changed = true;}
+                        if ui.button("V").clicked() {self.settings.key = str_to_key("V"); settings_changed = true;}
+                        if ui.button("W").clicked() {self.settings.key = str_to_key("W"); settings_changed = true;}
+                        if ui.button("X").clicked() {self.settings.key = str_to_key("X"); settings_changed = true;}
+                        if ui.button("Y").clicked() {self.settings.key = str_to_key("Y"); settings_changed = true;}
+                        if ui.button("Z").clicked() {self.settings.key = str_to_key("Z"); settings_changed = true;}
+
+                    });
+
+                });
+            });
+
+
 
             // Credits at the bottom left
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
@@ -157,7 +278,6 @@ impl epi::App for TemplateApp {
             match &self.console {
                 // Text for if there's no TF2 directory set yet
                 None=> {
-
                     ui.label("No valid TF2 directory set. (It should be the one inside \"common\")\n\n");
 
                     ui.label("Instructions:");
@@ -170,8 +290,8 @@ impl epi::App for TemplateApp {
 
                     ui.horizontal(|ui| {
                         ui.label("2. Add");
-                        copy_label(&mut self.message, "bind F8 \"exec command.cfg\"", ui);
-                        ui.label("to your autoexec.cfg file.");
+                        copy_label(&mut self.message, &format!("bind {} \"exec command.cfg\"", key_to_str(self.settings.key)), ui);
+                        ui.label("to your autoexec.cfg file. (or change it for whichever key you choose)");
                     });
 
                     ui.horizontal(|ui| {
@@ -180,11 +300,10 @@ impl epi::App for TemplateApp {
 
                             match rfd::FileDialog::new().pick_folder() {
                                 Some(pb) => {
-                                    
                                     let dir = pb.to_string_lossy().to_string();
                                     self.settings.directory = dir;
                                     self.console = use_directory(&self.settings.directory);
-
+                                    settings_changed = true;
                                 },
                                 None => {}
                             }
@@ -196,14 +315,84 @@ impl epi::App for TemplateApp {
 
                 },
 
-                // When there is a TF2 directory present
+                // UI when there is a TF2 directory present
                 Some(log) => {
+                    if self.server.players.is_empty() {
+                        ui.label("Not currently connected to a server.");
+                    } else {
 
+                        let width = (ui.available_width()-5.0)/2.0;
 
+                        egui::ScrollArea::vertical().show(ui, |ui| {
 
+                            egui::Grid::new("players").striped(true).show(ui, |ui| {
+
+                                let mut team1 = Vec::new();
+                                let mut team2 = Vec::new();
+
+                                for (_, p) in &self.server.players {
+                                    if p.team == Team::Invaders {
+                                        team1.push(p);
+                                    } else if p.team == Team::Defenders {
+                                        team2.push(p);
+                                    }
+
+                                }
+
+                                ui.horizontal(|ui| {
+                                    ui.set_width(width);
+                                    ui.colored_label(Color32::WHITE, "Player Name");
+                            
+                                    ui.with_layout(egui::Layout::right_to_left(), |ui| {
+                                        ui.horizontal(|ui| {
+                                            ui.colored_label(Color32::WHITE, "Time");
+
+                                            ui.colored_label(Color32::WHITE, "Info");
+                                        });
+                                    });
+                                });
+                                ui.horizontal(|ui| {
+                                    ui.set_width(width);
+                                    ui.colored_label(Color32::WHITE, "Player Name");
+                            
+                                    ui.with_layout(egui::Layout::right_to_left(), |ui| {
+                                        ui.horizontal(|ui| {
+                                            ui.colored_label(Color32::WHITE, "Time");
+
+                                            ui.colored_label(Color32::WHITE, "Info");
+                                        });
+                                    });
+                                });
+                                ui.end_row();
+
+                                let mut i = 0usize;
+                                loop {
+
+                                    if team1.get(i).is_none() && team2.get(i).is_none() {
+                                        break;
+                                    }
+
+                                    match team1.get(i) {
+                                        Some(p) => {
+                                            render_player(ui, &self.settings, p, width);
+                                        },
+                                        None => {}
+                                    }
+                                    match team2.get(i) {
+                                        Some(p) => {
+                                            render_player(ui, &self.settings, p, width);
+                                        },
+                                        None => {}
+                                    }
+                                    ui.end_row();
+
+                                    i += 1;
+                                }
+                            });
+                        });
+                    }
                 }
             }
-
         });
 
 
@@ -245,7 +434,7 @@ fn copy_label(log: &mut String, text: &str, ui: &mut Ui) {
                 },
                 Err(e) => {
                     log.clear();
-                    log.push_str("Couldn't copy text to clipboard");
+                    log.push_str(&format!("Couldn't copy text to clipboard: {}", e));
                 }
             }
         }
@@ -253,14 +442,62 @@ fn copy_label(log: &mut String, text: &str, ui: &mut Ui) {
 }
 
 // Try to open this TF2 directory
-fn use_directory(dir: &str) -> Option<LogWatcher> {
+fn use_directory(dir: &str) -> Option<Console> {
 
     if read_dir(format!("{}/tf/cfg", dir)).is_ok() {
         
-
+        match LogWatcher::register(&format!("{}/tf/console.log", dir)) {
+            Ok(lw) => {
+                return Some(Console{
+                    log: lw,
+                    com: Commander::new(dir),
+                });
+            },
+            Err(e) => {
+                println!("Failed to register log file: {}", e);
+            }
+        }
 
     }
 
     None
 }
 
+fn format_time(time: u32) -> String {
+    format!("{}:{}", time/60, time%60)
+}
+
+fn render_player(ui: &mut Ui, set: &Settings, p: &Player, width: f32) {
+    ui.horizontal(|ui| {
+        ui.set_width(width);
+        if p.steamid == set.user {
+            ui.colored_label(Color32::LIGHT_GREEN, truncate(&p.name, 23));
+        } else if p.bot {
+            ui.colored_label(Color32::RED, truncate(&p.name, 23));
+        } else {
+            ui.label(truncate(&p.name, 23));
+        }
+
+        ui.with_layout(egui::Layout::right_to_left(), |ui| {
+            ui.horizontal(|ui| {
+                ui.label(&format_time(p.time));
+
+                if p.bot {
+                    ui.colored_label(Color32::RED, "BOT");
+                }
+
+                if p.state == State::Spawning {
+                    ui.colored_label(Color32::YELLOW, "Joining");
+                }
+            });
+        });
+
+    });
+}
+
+fn truncate(s: &str, max_chars: usize) -> &str {
+    match s.char_indices().nth(max_chars) {
+        None => s,
+        Some((idx, _)) => &s[..idx],
+    }
+}

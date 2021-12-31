@@ -2,6 +2,8 @@ extern crate serde;
 extern crate chrono;
 extern crate rfd;
 extern crate clipboard;
+extern crate inputbot;
+
 
 mod app;
 use app::*;
