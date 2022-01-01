@@ -34,9 +34,8 @@ To fix this you can either run the tf2_bot_kicker as root with sudo, or grant ac
 
 # Settings and Configuration
 
-The program includes a number of settings for the user.
+To reset your settings, delete the `settings.json` file in the `cfg` folder.
 
-Inside the cfg folder is settings.cfg, you can change some basic settings here.\
 `User` - Your SteamID3 (like from when you use the status command in-game) to indentify if bots are on the friendly or enemy team. (will stop attempting to kick enemy bots if set)\
 `Kick Bots` - if you want to automatically call votekicks on bots.\
 `Join Alerts` - if you want to send chat messages that say when a bot is joining the server.\
@@ -48,18 +47,15 @@ Notes:
 1. I encourage you to not leave Chat Reminders on if the period is reasonably low (maybe 30 seconds?) as that may be annoying for the other players, find a balance or turn reminders off. I personally play with no Chat Reminders or Join Alerts at a period of 10 seconds.
 2. It is recommended to use a key that isn't used much by other programs such as F8, as to avoid it potentially being annoying if it is pressed when you have the game tabbed-out or similar. 
 
-# Building
-This program should build without issue through Cargo on Windows, on Linux it should build provided the libraries listed above are installed.
-
-
-# Additional Information
-
 ## Bot identification
 
 Bots are identified either by their name or steamid according to lists that you can add and remove from the program in the settings panel and File menu.
 
 Regex files should be a plain text file with a regex pattern on each line. SteamID files should be a plain text file which contain any number of SteamID3s, they do not need to be on new lines.
 
-## How it works
+# Building
+This program should build without issue through Cargo on Windows, on Linux it should build provided the libraries listed above are installed.
+
+# How it works
  
 By adding `-condebug -conclearlog` to your TF2 launch options, the game outputs the contents of the in-game console to a log file in real-time. By running certain commands, this log file can reveal players and their SteamIDs on casual servers, this program writes these commands to a cfg file in the TF2 directory and simulates a keypress to run those commands via the keybind. Players names and steamids are then checked against certain rules and if they are determined to be a bot, action can be taken. No hacks required!
