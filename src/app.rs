@@ -65,15 +65,31 @@ impl Default for TemplateApp {
             LogMatcher::new(Regex::new(r_refresh_complete).unwrap(), f_refresh_complete),
         ];
 
+        let mut message = String::from("Loaded");
+
+        let mut bot_checker = BotChecker::new();
+        for uuid_list in &settings.uuid_lists {
+            match bot_checker.add_steamid_list(uuid_list) {
+                Ok(_) => {},
+                Err(e) => message = format!("{}", e),
+            }
+        }
+        for regex_list in &settings.regex_lists {
+            match bot_checker.add_regex_list(regex_list) {
+                Ok(_) => {},
+                Err(e) => message = format!("{}", e),
+            }        
+        }
+
         Self {
             timer: Timer::new(),
             settings,
-            message: String::from("Loaded..."),
+            message,
             console,
             paused: true,
             server: Server::new(),
             regexes: reg,
-            bot_checker: BotChecker::new(),
+            bot_checker,
         }
     }
 }
@@ -160,6 +176,44 @@ impl epi::App for TemplateApp {
                         }
                     }
 
+                    if ui.button("Add Regex List").clicked() {
+                        match rfd::FileDialog::new().set_directory("cfg").pick_file() {
+                            Some(pb) => {
+                                let file = pb.to_string_lossy().to_string();
+                                match self.bot_checker.add_regex_list(&file) {
+                                    Ok(_) => {
+                                        self.message = format!("Added {} as a regex list", &file.split("/").last().unwrap());
+                                    },
+                                    Err(e) => {
+                                        self.message = format!("{}", e);
+                                    }
+                                }
+                                self.settings.regex_lists.push(file);
+                                settings_changed = true;
+                            },
+                            None => {}
+                        }
+                    }
+
+                    if ui.button("Add SteamID List").clicked() {
+                        match rfd::FileDialog::new().set_directory("cfg").pick_file() {
+                            Some(pb) => {
+                                let file = pb.to_string_lossy().to_string();
+                                match self.bot_checker.add_steamid_list(&file) {
+                                    Ok(_) => {
+                                        self.message = format!("Added {} as a steamid list", &file.split("/").last().unwrap());
+                                    },
+                                    Err(e) => {
+                                        self.message = format!("{}", e);
+                                    }
+                                }
+                                self.settings.uuid_lists.push(file);
+                                settings_changed = true;
+                            },
+                            None => {}
+                        }
+                    }
+
                     if ui.button("Quit").clicked() {
                         frame.quit();
                     }
@@ -172,103 +226,145 @@ impl epi::App for TemplateApp {
             });
         });
 
-        egui::SidePanel::left("side_panel").show(ctx, |ui| {
-            ui.heading("Settings");
+        egui::TopBottomPanel::bottom("bottom_panel").show(ctx, |ui| {
 
-            ui.horizontal(|ui| {
-                ui.label("User: ");
-                settings_changed |= ui.text_edit_singleline(&mut self.settings.user).changed();
-            });
-
-            settings_changed |= ui.checkbox(&mut self.settings.kick, "Kick Bots").changed();
-            settings_changed |= ui.checkbox(&mut self.settings.join_alert, "Join Alerts").changed();
-            settings_changed |= ui.checkbox(&mut self.settings.chat_reminders, "Chat Reminders").changed();
-
-            ui.horizontal(|ui| {
-                ui.label("Period: ");
-                settings_changed |= ui.add(egui::Slider::new(&mut self.settings.period, 1.0..=60.0)).changed();
-            });
-
-            // Command Key
-            ui.horizontal(|ui| {
-                ui.label(&format!("Command key: {}", key_to_str(self.settings.key)));
-                ui.menu_button("Change", |ui| {
-
-                    egui::ScrollArea::vertical().show(ui, |ui| {
-
-                        if ui.button("F1").clicked() {self.settings.key = str_to_key("F1"); settings_changed = true;}
-                        if ui.button("F2").clicked() {self.settings.key = str_to_key("F2"); settings_changed = true;}
-                        if ui.button("F3").clicked() {self.settings.key = str_to_key("F3"); settings_changed = true;}
-                        if ui.button("F4").clicked() {self.settings.key = str_to_key("F4"); settings_changed = true;}
-                        if ui.button("F5").clicked() {self.settings.key = str_to_key("F5"); settings_changed = true;}
-                        if ui.button("F6").clicked() {self.settings.key = str_to_key("F6"); settings_changed = true;}
-                        if ui.button("F7").clicked() {self.settings.key = str_to_key("F7"); settings_changed = true;}
-                        if ui.button("F8").clicked() {self.settings.key = str_to_key("F8"); settings_changed = true;}
-                        if ui.button("F9").clicked() {self.settings.key = str_to_key("F9"); settings_changed = true;}
-                        if ui.button("F10").clicked() {self.settings.key = str_to_key("F10"); settings_changed = true;}
-                        if ui.button("F11").clicked() {self.settings.key = str_to_key("F11"); settings_changed = true;}
-                        if ui.button("F12").clicked() {self.settings.key = str_to_key("F12"); settings_changed = true;}
-                        if ui.button("kp_ins").clicked() {self.settings.key = str_to_key("kp_ins"); settings_changed = true;}
-                        if ui.button("kp_end").clicked() {self.settings.key = str_to_key("kp_end"); settings_changed = true;}
-                        if ui.button("kp_downarrow").clicked() {self.settings.key = str_to_key("kp_downarrow"); settings_changed = true;}
-                        if ui.button("kp_pgdn").clicked() {self.settings.key = str_to_key("kp_pgdn"); settings_changed = true;}
-                        if ui.button("kp_leftarrow").clicked() {self.settings.key = str_to_key("kp_leftarrow"); settings_changed = true;}
-                        if ui.button("kp_5").clicked() {self.settings.key = str_to_key("kp_5"); settings_changed = true;}
-                        if ui.button("kp_rightarrow").clicked() {self.settings.key = str_to_key("kp_rightarrow"); settings_changed = true;}
-                        if ui.button("kp_home").clicked() {self.settings.key = str_to_key("kp_home"); settings_changed = true;}
-                        if ui.button("kp_uparrow").clicked() {self.settings.key = str_to_key("kp_uparrow"); settings_changed = true;}
-                        if ui.button("kp_pgup").clicked() {self.settings.key = str_to_key("kp_pgup"); settings_changed = true;}
-                        if ui.button("numlock").clicked() {self.settings.key = str_to_key("numlock"); settings_changed = true;}
-                        if ui.button("scrolllock").clicked() {self.settings.key = str_to_key("scrolllock"); settings_changed = true;}
-                        if ui.button("capslock").clicked() {self.settings.key = str_to_key("capslock"); settings_changed = true;}
-                        if ui.button("shift").clicked() {self.settings.key = str_to_key("shift"); settings_changed = true;}
-                        if ui.button("A").clicked() {self.settings.key = str_to_key("A"); settings_changed = true;}
-                        if ui.button("B").clicked() {self.settings.key = str_to_key("B"); settings_changed = true;}
-                        if ui.button("C").clicked() {self.settings.key = str_to_key("C"); settings_changed = true;}
-                        if ui.button("D").clicked() {self.settings.key = str_to_key("D"); settings_changed = true;}
-                        if ui.button("E").clicked() {self.settings.key = str_to_key("E"); settings_changed = true;}
-                        if ui.button("F").clicked() {self.settings.key = str_to_key("F"); settings_changed = true;}
-                        if ui.button("G").clicked() {self.settings.key = str_to_key("G"); settings_changed = true;}
-                        if ui.button("H").clicked() {self.settings.key = str_to_key("H"); settings_changed = true;}
-                        if ui.button("I").clicked() {self.settings.key = str_to_key("I"); settings_changed = true;}
-                        if ui.button("J").clicked() {self.settings.key = str_to_key("J"); settings_changed = true;}
-                        if ui.button("K").clicked() {self.settings.key = str_to_key("K"); settings_changed = true;}
-                        if ui.button("L").clicked() {self.settings.key = str_to_key("L"); settings_changed = true;}
-                        if ui.button("M").clicked() {self.settings.key = str_to_key("M"); settings_changed = true;}
-                        if ui.button("N").clicked() {self.settings.key = str_to_key("N"); settings_changed = true;}
-                        if ui.button("O").clicked() {self.settings.key = str_to_key("O"); settings_changed = true;}
-                        if ui.button("P").clicked() {self.settings.key = str_to_key("P"); settings_changed = true;}
-                        if ui.button("Q").clicked() {self.settings.key = str_to_key("Q"); settings_changed = true;}
-                        if ui.button("R").clicked() {self.settings.key = str_to_key("R"); settings_changed = true;}
-                        if ui.button("S").clicked() {self.settings.key = str_to_key("S"); settings_changed = true;}
-                        if ui.button("T").clicked() {self.settings.key = str_to_key("T"); settings_changed = true;}
-                        if ui.button("U").clicked() {self.settings.key = str_to_key("U"); settings_changed = true;}
-                        if ui.button("V").clicked() {self.settings.key = str_to_key("V"); settings_changed = true;}
-                        if ui.button("W").clicked() {self.settings.key = str_to_key("W"); settings_changed = true;}
-                        if ui.button("X").clicked() {self.settings.key = str_to_key("X"); settings_changed = true;}
-                        if ui.button("Y").clicked() {self.settings.key = str_to_key("Y"); settings_changed = true;}
-                        if ui.button("Z").clicked() {self.settings.key = str_to_key("Z"); settings_changed = true;}
-
-                    });
-
-                });
-            });
-
-
+            // Display a little bit of information
+            ui.label(&self.message);
 
             // Credits at the bottom left
-            ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 0.0;
+                ui.label("powered by ");
+                ui.hyperlink_to("egui", "https://github.com/emilk/egui");
+                ui.label(" and ");
+                ui.hyperlink_to("eframe", "https://github.com/emilk/egui/tree/master/eframe");
+            });
+
+        });
+
+        egui::SidePanel::left("side_panel").show(ctx, |ui| {
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                ui.heading("Settings");
+
                 ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 0.0;
-                    ui.label("powered by ");
-                    ui.hyperlink_to("egui", "https://github.com/emilk/egui");
-                    ui.label(" and ");
-                    ui.hyperlink_to("eframe", "https://github.com/emilk/egui/tree/master/eframe");
+                    ui.label("User: ");
+                    settings_changed |= ui.text_edit_singleline(&mut self.settings.user).changed();
                 });
 
-                // Display a little bit of information
-                ui.label(&self.message);
+                settings_changed |= ui.checkbox(&mut self.settings.kick, "Kick Bots").changed();
+                settings_changed |= ui.checkbox(&mut self.settings.join_alert, "Join Alerts").changed();
+                settings_changed |= ui.checkbox(&mut self.settings.chat_reminders, "Chat Reminders").changed();
+
+                ui.horizontal(|ui| {
+                    ui.label("Period: ");
+                    settings_changed |= ui.add(egui::Slider::new(&mut self.settings.period, 1.0..=60.0)).changed();
+                });
+
+                // Command Key
+                ui.horizontal(|ui| {
+                    ui.label(&format!("Command key: {}", key_to_str(self.settings.key)));
+                    ui.menu_button("Change", |ui| {
+
+                        egui::ScrollArea::vertical().show(ui, |ui| {
+
+                            if ui.button("F1").clicked() {self.settings.key = str_to_key("F1"); settings_changed = true;}
+                            if ui.button("F2").clicked() {self.settings.key = str_to_key("F2"); settings_changed = true;}
+                            if ui.button("F3").clicked() {self.settings.key = str_to_key("F3"); settings_changed = true;}
+                            if ui.button("F4").clicked() {self.settings.key = str_to_key("F4"); settings_changed = true;}
+                            if ui.button("F5").clicked() {self.settings.key = str_to_key("F5"); settings_changed = true;}
+                            if ui.button("F6").clicked() {self.settings.key = str_to_key("F6"); settings_changed = true;}
+                            if ui.button("F7").clicked() {self.settings.key = str_to_key("F7"); settings_changed = true;}
+                            if ui.button("F8").clicked() {self.settings.key = str_to_key("F8"); settings_changed = true;}
+                            if ui.button("F9").clicked() {self.settings.key = str_to_key("F9"); settings_changed = true;}
+                            if ui.button("F10").clicked() {self.settings.key = str_to_key("F10"); settings_changed = true;}
+                            if ui.button("F11").clicked() {self.settings.key = str_to_key("F11"); settings_changed = true;}
+                            if ui.button("F12").clicked() {self.settings.key = str_to_key("F12"); settings_changed = true;}
+                            if ui.button("kp_ins").clicked() {self.settings.key = str_to_key("kp_ins"); settings_changed = true;}
+                            if ui.button("kp_end").clicked() {self.settings.key = str_to_key("kp_end"); settings_changed = true;}
+                            if ui.button("kp_downarrow").clicked() {self.settings.key = str_to_key("kp_downarrow"); settings_changed = true;}
+                            if ui.button("kp_pgdn").clicked() {self.settings.key = str_to_key("kp_pgdn"); settings_changed = true;}
+                            if ui.button("kp_leftarrow").clicked() {self.settings.key = str_to_key("kp_leftarrow"); settings_changed = true;}
+                            if ui.button("kp_5").clicked() {self.settings.key = str_to_key("kp_5"); settings_changed = true;}
+                            if ui.button("kp_rightarrow").clicked() {self.settings.key = str_to_key("kp_rightarrow"); settings_changed = true;}
+                            if ui.button("kp_home").clicked() {self.settings.key = str_to_key("kp_home"); settings_changed = true;}
+                            if ui.button("kp_uparrow").clicked() {self.settings.key = str_to_key("kp_uparrow"); settings_changed = true;}
+                            if ui.button("kp_pgup").clicked() {self.settings.key = str_to_key("kp_pgup"); settings_changed = true;}
+                            if ui.button("numlock").clicked() {self.settings.key = str_to_key("numlock"); settings_changed = true;}
+                            if ui.button("scrolllock").clicked() {self.settings.key = str_to_key("scrolllock"); settings_changed = true;}
+                            if ui.button("capslock").clicked() {self.settings.key = str_to_key("capslock"); settings_changed = true;}
+                            if ui.button("shift").clicked() {self.settings.key = str_to_key("shift"); settings_changed = true;}
+                            if ui.button("A").clicked() {self.settings.key = str_to_key("A"); settings_changed = true;}
+                            if ui.button("B").clicked() {self.settings.key = str_to_key("B"); settings_changed = true;}
+                            if ui.button("C").clicked() {self.settings.key = str_to_key("C"); settings_changed = true;}
+                            if ui.button("D").clicked() {self.settings.key = str_to_key("D"); settings_changed = true;}
+                            if ui.button("E").clicked() {self.settings.key = str_to_key("E"); settings_changed = true;}
+                            if ui.button("F").clicked() {self.settings.key = str_to_key("F"); settings_changed = true;}
+                            if ui.button("G").clicked() {self.settings.key = str_to_key("G"); settings_changed = true;}
+                            if ui.button("H").clicked() {self.settings.key = str_to_key("H"); settings_changed = true;}
+                            if ui.button("I").clicked() {self.settings.key = str_to_key("I"); settings_changed = true;}
+                            if ui.button("J").clicked() {self.settings.key = str_to_key("J"); settings_changed = true;}
+                            if ui.button("K").clicked() {self.settings.key = str_to_key("K"); settings_changed = true;}
+                            if ui.button("L").clicked() {self.settings.key = str_to_key("L"); settings_changed = true;}
+                            if ui.button("M").clicked() {self.settings.key = str_to_key("M"); settings_changed = true;}
+                            if ui.button("N").clicked() {self.settings.key = str_to_key("N"); settings_changed = true;}
+                            if ui.button("O").clicked() {self.settings.key = str_to_key("O"); settings_changed = true;}
+                            if ui.button("P").clicked() {self.settings.key = str_to_key("P"); settings_changed = true;}
+                            if ui.button("Q").clicked() {self.settings.key = str_to_key("Q"); settings_changed = true;}
+                            if ui.button("R").clicked() {self.settings.key = str_to_key("R"); settings_changed = true;}
+                            if ui.button("S").clicked() {self.settings.key = str_to_key("S"); settings_changed = true;}
+                            if ui.button("T").clicked() {self.settings.key = str_to_key("T"); settings_changed = true;}
+                            if ui.button("U").clicked() {self.settings.key = str_to_key("U"); settings_changed = true;}
+                            if ui.button("V").clicked() {self.settings.key = str_to_key("V"); settings_changed = true;}
+                            if ui.button("W").clicked() {self.settings.key = str_to_key("W"); settings_changed = true;}
+                            if ui.button("X").clicked() {self.settings.key = str_to_key("X"); settings_changed = true;}
+                            if ui.button("Y").clicked() {self.settings.key = str_to_key("Y"); settings_changed = true;}
+                            if ui.button("Z").clicked() {self.settings.key = str_to_key("Z"); settings_changed = true;}
+
+                        });
+
+                    });
+                });
+
+                ui.label("");
+
+                ui.collapsing("Regex Lists", |ui| {
+                    let mut ind: Option<usize> = None;
+                    for (i, l) in self.settings.regex_lists.iter().enumerate() {
+                        let lab = ui.selectable_label(false, l.split("/").last().unwrap());
+                        if lab.clicked() {
+                            ind = Some(i);
+                        }
+                        lab.on_hover_text("Click to remove");
+                    }
+                    match ind {
+                        Some(i) => {
+                            self.settings.regex_lists.remove(i);
+                            settings_changed = true;
+                        },
+                        None => {}
+                    }
+                });
+
+                ui.collapsing("SteamID Lists", |ui| {
+                    let mut ind: Option<usize> = None;
+                    for (i, l) in self.settings.uuid_lists.iter().enumerate() {
+                        let lab = ui.selectable_label(false, l.split("/").last().unwrap());
+                        if lab.clicked() {
+                            ind = Some(i);
+                        }
+                        lab.on_hover_text("Click to remove");
+                    }
+                    match ind {
+                        Some(i) => {
+                            self.settings.uuid_lists.remove(i);
+                            settings_changed = true;
+                        },
+                        None => {}
+                    }
+                });
+
             });
+
         });
 
 
@@ -345,8 +441,8 @@ impl epi::App for TemplateApp {
                             
                                     ui.with_layout(egui::Layout::right_to_left(), |ui| {
                                         ui.horizontal(|ui| {
+                                            ui.label("   ");
                                             ui.colored_label(Color32::WHITE, "Time");
-
                                             ui.colored_label(Color32::WHITE, "Info");
                                         });
                                     });
@@ -357,8 +453,8 @@ impl epi::App for TemplateApp {
                             
                                     ui.with_layout(egui::Layout::right_to_left(), |ui| {
                                         ui.horizontal(|ui| {
+                                            ui.label("   ");
                                             ui.colored_label(Color32::WHITE, "Time");
-
                                             ui.colored_label(Color32::WHITE, "Info");
                                         });
                                     });
@@ -395,8 +491,6 @@ impl epi::App for TemplateApp {
             }
         });
 
-
-
             // egui::Window::new("Window").show(ctx, |ui| {
             //     ui.label("Windows can be moved by dragging them.");
             //     ui.label("They are automatically sized based on contents.");
@@ -405,7 +499,7 @@ impl epi::App for TemplateApp {
             // });
 
         if settings_changed {
-            match self.settings.export("settings.json") {
+            match self.settings.export("cfg/settings.json") {
                 Ok(_) => {},
                 Err(e) => {
                     println!("Failed to export settings");
@@ -480,6 +574,7 @@ fn render_player(ui: &mut Ui, set: &Settings, p: &Player, width: f32) {
 
         ui.with_layout(egui::Layout::right_to_left(), |ui| {
             ui.horizontal(|ui| {
+                ui.label("   ");
                 ui.label(&format_time(p.time));
 
                 if p.bot {

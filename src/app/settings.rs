@@ -12,6 +12,9 @@ pub struct Settings {
     pub directory: String,
     pub key: KeybdKey,
 
+    pub uuid_lists: Vec<String>,
+    pub regex_lists: Vec<String>,
+
 }
 
 impl Settings {
@@ -25,6 +28,9 @@ impl Settings {
             period: 10.0,
             directory: String::from(""),
             key: KeybdKey::F8Key,
+
+            uuid_lists: Vec::new(),
+            regex_lists: Vec::new(),
         }
     }
 
