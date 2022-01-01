@@ -25,7 +25,7 @@ use bot_checker::*;
 
 use self::{console::{commander::Commander, log_watcher::LogWatcher}, regexes::LogMatcher};
 
-pub struct TemplateApp {
+pub struct TF2BotKicker {
 
     timer: Timer,
     message: String,
@@ -40,11 +40,14 @@ pub struct TemplateApp {
 
 }
 
-impl Default for TemplateApp {
+impl Default for TF2BotKicker {
+
+    // Create the application
     fn default() -> Self {
 
         let settings: Settings;
 
+        // Attempt to load settings, create new default settings if it can't load an existing file
         let set = Settings::import("cfg/settings.json");
         if set.is_err() {
             settings = Settings::new();
@@ -52,8 +55,10 @@ impl Default for TemplateApp {
             settings = set.unwrap();
         }
 
+        // Try to oad set TF2 directory
         let console = use_directory(&settings.directory);
 
+        // Load regexes
         let reg = vec![
             LogMatcher::new(Regex::new(r_status).unwrap(), f_status),
             LogMatcher::new(Regex::new(r_lobby).unwrap(), f_lobby),
@@ -67,17 +72,18 @@ impl Default for TemplateApp {
 
         let mut message = String::from("Loaded");
 
+        // Create bot checker and load any bot detection rules saved
         let mut bot_checker = BotChecker::new();
         for uuid_list in &settings.uuid_lists {
             match bot_checker.add_steamid_list(uuid_list) {
                 Ok(_) => {},
-                Err(e) => message = format!("{}", e),
+                Err(e) => message = format!("Error loading {}: {}", uuid_list, e),
             }
         }
         for regex_list in &settings.regex_lists {
             match bot_checker.add_regex_list(regex_list) {
                 Ok(_) => {},
-                Err(e) => message = format!("{}", e),
+                Err(e) => message = format!("Error loading {}: {}", regex_list, e),
             }        
         }
 
@@ -94,7 +100,7 @@ impl Default for TemplateApp {
     }
 }
 
-impl epi::App for TemplateApp {
+impl epi::App for TF2BotKicker {
     fn name(&self) -> &str {
         "TF2 Bot Kicker by Bash09/Googe14"
     }
@@ -111,6 +117,7 @@ impl epi::App for TemplateApp {
 
     }
 
+    // Called every frame
     fn update(&mut self, ctx: &egui::CtxRef, frame: &eframe::epi::Frame) {
         // Ensures update is called again as soon as this one is finished.
         ctx.request_repaint();
@@ -119,7 +126,7 @@ impl epi::App for TemplateApp {
         let t = self.timer.go(self.settings.period);
         if t.is_none() {return;}
 
-        // Update
+        // Update if it's time to refresh
         if self.timer.update() && !self.paused && self.console.is_some() {
             let system_time = SystemTime::now();
             let datetime: DateTime<Local> = system_time.into();
@@ -134,8 +141,10 @@ impl epi::App for TemplateApp {
 
         }
 
+        // Check if a valid TF2 directory has been loaded
         match &mut self.console {
             Some(con) => {
+                // If there is a loaded dir, process any new console lines
                 loop {
                     match con.log.next_line() {
                         Some(line) => {
@@ -158,16 +167,23 @@ impl epi::App for TemplateApp {
         // Tracks if the settings need to be saved
         let mut settings_changed = false;
 
+        // Top menu bar
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            // The top panel is often a good place for a menu bar:
-            
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("File", |ui| {
 
                     if ui.button("Set TF2 Directory").clicked() {
                         match rfd::FileDialog::new().pick_folder() {
                             Some(pb) => {
-                                let dir = pb.to_string_lossy().to_string();
+                                let dir;
+                                match pb.strip_prefix(std::env::current_dir().unwrap()) {
+                                    Ok(pb) => {
+                                        dir = pb.to_string_lossy().to_string();
+                                    },
+                                    Err(_) => {
+                                        dir = pb.to_string_lossy().to_string();
+                                    }
+                                }
                                 self.settings.directory = dir;
                                 self.console = use_directory(&self.settings.directory);
                                 settings_changed = true;
@@ -179,16 +195,25 @@ impl epi::App for TemplateApp {
                     if ui.button("Add Regex List").clicked() {
                         match rfd::FileDialog::new().set_directory("cfg").pick_file() {
                             Some(pb) => {
-                                let file = pb.to_string_lossy().to_string();
-                                match self.bot_checker.add_regex_list(&file) {
+                                let dir;
+                                // Try to make it a relative directory instead of going from root
+                                match pb.strip_prefix(std::env::current_dir().unwrap()) {
+                                    Ok(pb) => {
+                                        dir = pb.to_string_lossy().to_string();
+                                    },
+                                    Err(_) => {
+                                        dir = pb.to_string_lossy().to_string();
+                                    }
+                                }
+                                match self.bot_checker.add_regex_list(&dir) {
                                     Ok(_) => {
-                                        self.message = format!("Added {} as a regex list", &file.split("/").last().unwrap());
+                                        self.message = format!("Added {} as a regex list", &dir.split("/").last().unwrap());
                                     },
                                     Err(e) => {
                                         self.message = format!("{}", e);
                                     }
                                 }
-                                self.settings.regex_lists.push(file);
+                                self.settings.regex_lists.push(dir);
                                 settings_changed = true;
                             },
                             None => {}
@@ -198,16 +223,24 @@ impl epi::App for TemplateApp {
                     if ui.button("Add SteamID List").clicked() {
                         match rfd::FileDialog::new().set_directory("cfg").pick_file() {
                             Some(pb) => {
-                                let file = pb.to_string_lossy().to_string();
-                                match self.bot_checker.add_steamid_list(&file) {
+                                let dir;
+                                match pb.strip_prefix(std::env::current_dir().unwrap()) {
+                                    Ok(pb) => {
+                                        dir = pb.to_string_lossy().to_string();
+                                    },
+                                    Err(_) => {
+                                        dir = pb.to_string_lossy().to_string();
+                                    }
+                                }
+                                match self.bot_checker.add_steamid_list(&dir) {
                                     Ok(_) => {
-                                        self.message = format!("Added {} as a steamid list", &file.split("/").last().unwrap());
+                                        self.message = format!("Added {} as a steamid list", &dir.split("/").last().unwrap());
                                     },
                                     Err(e) => {
                                         self.message = format!("{}", e);
                                     }
                                 }
-                                self.settings.uuid_lists.push(file);
+                                self.settings.uuid_lists.push(dir);
                                 settings_changed = true;
                             },
                             None => {}
@@ -226,6 +259,7 @@ impl epi::App for TemplateApp {
             });
         });
 
+        // Message and eframe/egui credits
         egui::TopBottomPanel::bottom("bottom_panel").show(ctx, |ui| {
 
             // Display a little bit of information
@@ -242,6 +276,7 @@ impl epi::App for TemplateApp {
 
         });
 
+        // Left panel
         egui::SidePanel::left("side_panel").show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
                 ui.heading("Settings");
@@ -326,6 +361,7 @@ impl epi::App for TemplateApp {
                 });
 
                 ui.label("");
+                ui.heading("Bot Detection Rules");
 
                 ui.collapsing("Regex Lists", |ui| {
                     let mut ind: Option<usize> = None;
@@ -367,11 +403,12 @@ impl epi::App for TemplateApp {
 
         });
 
-
+        // Main window with info and players
         egui::CentralPanel::default().show(ctx, |ui| {
-            // The central panel the region left after adding TopPanel's and SidePanel's
 
+            // Check if a TF2 directory is loaded
             match &self.console {
+
                 // Text for if there's no TF2 directory set yet
                 None=> {
                     ui.label("No valid TF2 directory set. (It should be the one inside \"common\")\n\n");
@@ -396,7 +433,15 @@ impl epi::App for TemplateApp {
 
                             match rfd::FileDialog::new().pick_folder() {
                                 Some(pb) => {
-                                    let dir = pb.to_string_lossy().to_string();
+                                    let dir;
+                                    match pb.strip_prefix(std::env::current_dir().unwrap()) {
+                                        Ok(pb) => {
+                                            dir = pb.to_string_lossy().to_string();
+                                        },
+                                        Err(_) => {
+                                            dir = pb.to_string_lossy().to_string();
+                                        }
+                                    }
                                     self.settings.directory = dir;
                                     self.console = use_directory(&self.settings.directory);
                                     settings_changed = true;
@@ -412,7 +457,7 @@ impl epi::App for TemplateApp {
                 },
 
                 // UI when there is a TF2 directory present
-                Some(log) => {
+                Some(_) => {
                     if self.server.players.is_empty() {
                         ui.label("Not currently connected to a server.");
                     } else {
@@ -426,7 +471,8 @@ impl epi::App for TemplateApp {
                                 let mut team1 = Vec::new();
                                 let mut team2 = Vec::new();
 
-                                for (_, p) in &self.server.players {
+                                // Get players for each team
+                                for (_, p) in &mut self.server.players {
                                     if p.team == Team::Invaders {
                                         team1.push(p);
                                     } else if p.team == Team::Defenders {
@@ -435,6 +481,7 @@ impl epi::App for TemplateApp {
 
                                 }
 
+                                // Headings
                                 ui.horizontal(|ui| {
                                     ui.set_width(width);
                                     ui.colored_label(Color32::WHITE, "Player Name");
@@ -461,6 +508,7 @@ impl epi::App for TemplateApp {
                                 });
                                 ui.end_row();
 
+                                // Show players
                                 let mut i = 0usize;
                                 loop {
 
@@ -468,15 +516,15 @@ impl epi::App for TemplateApp {
                                         break;
                                     }
 
-                                    match team1.get(i) {
+                                    match team1.get_mut(i) {
                                         Some(p) => {
-                                            render_player(ui, &self.settings, p, width);
+                                            render_player(ui, &self.settings, &mut self.message, *p, width);
                                         },
                                         None => {}
                                     }
-                                    match team2.get(i) {
+                                    match team2.get_mut(i) {
                                         Some(p) => {
-                                            render_player(ui, &self.settings, p, width);
+                                            render_player(ui, &self.settings, &mut self.message, *p, width);
                                         },
                                         None => {}
                                     }
@@ -498,7 +546,9 @@ impl epi::App for TemplateApp {
             //     ui.label("You would normally chose either panels OR windows.");
             // });
 
+        // Export settings if they've changed
         if settings_changed {
+            std::fs::create_dir("cfg");
             match self.settings.export("cfg/settings.json") {
                 Ok(_) => {},
                 Err(e) => {
@@ -557,20 +607,38 @@ fn use_directory(dir: &str) -> Option<Console> {
     None
 }
 
+// u32 -> minutes:seconds
 fn format_time(time: u32) -> String {
     format!("{}:{}", time/60, time%60)
 }
 
-fn render_player(ui: &mut Ui, set: &Settings, p: &Player, width: f32) {
+const TRUNC_LEN: usize = 20;
+
+// Ui for a player
+fn render_player(ui: &mut Ui, set: &Settings, mes: &mut String, p: &mut Player, width: f32) {
     ui.horizontal(|ui| {
         ui.set_width(width);
+
+        let text;
         if p.steamid == set.user {
-            ui.colored_label(Color32::LIGHT_GREEN, truncate(&p.name, 23));
+            text = egui::RichText::new(truncate(&p.name, TRUNC_LEN)).color(Color32::LIGHT_GREEN);
         } else if p.bot {
-            ui.colored_label(Color32::RED, truncate(&p.name, 23));
+            text = egui::RichText::new(truncate(&p.name, TRUNC_LEN)).color(Color32::RED);
         } else {
-            ui.label(truncate(&p.name, 23));
+            text = egui::RichText::new(truncate(&p.name, TRUNC_LEN));
         }
+
+        let lab = ui.selectable_label(false, text);
+        if lab.clicked() {
+            let ctx: Result<ClipboardContext, Box<dyn std::error::Error>> = ClipboardProvider::new();
+            ctx.unwrap().set_contents(p.steamid.clone()).unwrap();
+            mes.clear();
+            mes.push_str(&format!("Copied \"{}\"", p.steamid));
+        }
+        if lab.secondary_clicked() {
+            p.bot = !p.bot;
+        }
+        lab.on_hover_text(&format!("Left: Copy SteamID, Right: Mark as {}Bot", match p.bot {true => "NOT ", false => ""}));
 
         ui.with_layout(egui::Layout::right_to_left(), |ui| {
             ui.horizontal(|ui| {
@@ -590,6 +658,7 @@ fn render_player(ui: &mut Ui, set: &Settings, p: &Player, width: f32) {
     });
 }
 
+/// Truncates a &str
 fn truncate(s: &str, max_chars: usize) -> &str {
     match s.char_indices().nth(max_chars) {
         None => s,

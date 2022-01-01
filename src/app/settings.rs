@@ -29,7 +29,7 @@ impl Settings {
             directory: String::from(""),
             key: KeybdKey::F8Key,
 
-            uuid_lists: Vec::new(),
+            uuid_lists: vec![String::from("cfg/recorded_bots.txt")],
             regex_lists: Vec::new(),
         }
     }
