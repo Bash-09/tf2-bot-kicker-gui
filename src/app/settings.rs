@@ -30,7 +30,7 @@ impl Settings {
             key: KeybdKey::F8Key,
 
             uuid_lists: vec![String::from("cfg/recorded_bots.txt")],
-            regex_lists: Vec::new(),
+            regex_lists: vec![String::from("cfg/regx.txt")],
         }
     }
 
