@@ -54,7 +54,13 @@ Bots are identified either by their name or steamid according to lists that you 
 Regex files should be a plain text file with a regex pattern on each line. SteamID files should be a plain text file which contain any number of SteamID3s, they do not need to be on new lines.
 
 # Building
-This program should build without issue through Cargo on Windows, on Linux it should build provided the libraries listed above are installed.
+This program should build without issue through Cargo on Windows. 
+
+On Linux some libraries may need to be installed. (As listed in the Ubuntu repository)
+
+`libxcb-render0-dev`\
+`libxcb-shape0-dev`\
+`libxcb-xfixes0-dev`
 
 # How it works
  
