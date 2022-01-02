@@ -15,7 +15,7 @@ Download the program from [here.](https://github.com/Googe14/tf2-bot-kicker-gui/
 
 ## Windows
 
-Provided you have set the appropriate keybind in your TF2 `autoexec.cfg`, the program should run without issue.
+Should work without issue.
 
 ## Linux
 
