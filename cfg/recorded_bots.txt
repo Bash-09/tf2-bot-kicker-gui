@@ -278,3 +278,7 @@
 
 [U:1:1241213517] - [Volvo]Big Smoke
 [U:1:1241090805] - [Volvo]Big Smoke
+[U:1:1128614259] - irc.myg0t.gg:6667#myg0t
+[U:1:1197756523] - (1)irc.myg0t.gg:6667#myg0t
+[U:1:1132715180] - irc.myg0t.gg:6667#myg0t
+[U:1:1197702352] - irc.myg0t.gg:6667#myg0t

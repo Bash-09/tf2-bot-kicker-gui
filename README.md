@@ -2,6 +2,8 @@
 
 A (somewhat) cross-platform bot identifier/kicker written in Rust.
 
+![Demonstration Image](images/Demonstration.png)
+
 # Usage
 
 Download the program from [here.](https://github.com/Googe14/tf2-bot-kicker-gui/releases)
