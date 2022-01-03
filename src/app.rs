@@ -631,14 +631,19 @@ fn render_player(ui: &mut Ui, set: &Settings, mes: &mut String, p: &mut Player, 
         let lab = ui.selectable_label(false, text);
         if lab.clicked() {
             let ctx: Result<ClipboardContext, Box<dyn std::error::Error>> = ClipboardProvider::new();
-            ctx.unwrap().set_contents(p.steamid.clone()).unwrap();
+            ctx.unwrap().set_contents(p.name.clone()).unwrap();
             mes.clear();
-            mes.push_str(&format!("Copied \"{}\"", p.steamid));
+            mes.push_str(&format!("Copied \"{}\"", p.name));
         }
         if lab.secondary_clicked() {
+            let ctx: Result<ClipboardContext, Box<dyn std::error::Error>> = ClipboardProvider::new();
+            ctx.unwrap().set_contents(p.steamid.clone()).unwrap();
+            mes.clear();
+            mes.push_str(&format!("Copied \"{}\"", p.steamid));        }
+        if lab.middle_clicked() {
             p.bot = !p.bot;
         }
-        lab.on_hover_text(&format!("Left: Copy SteamID, Right: Mark as {}Bot", match p.bot {true => "NOT ", false => ""}));
+        lab.on_hover_text(&format!("Left: Copy Name, Right: Copy SteamID, Middle: Mark as {}Bot", match p.bot {true => "NOT ", false => ""}));
 
         ui.with_layout(egui::Layout::right_to_left(), |ui| {
             ui.horizontal(|ui| {
