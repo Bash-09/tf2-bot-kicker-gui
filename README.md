@@ -15,7 +15,7 @@ Download the program from [here.](https://github.com/Googe14/tf2-bot-kicker-gui/
 
 ## Windows
 
-Provided you have set the appropriate keybind in your TF2 `autoexec.cfg`, the program should run without issue.
+Should work without issue.
 
 ## Linux
 
@@ -25,13 +25,13 @@ Linux users may have to install some of the following packages. (As listed in th
 `libudev-dev`\
 `libinput-dev`
 
-X11 environments should run fine once the appropriate packes are installed, you have set the appropriate keybind in your TF2 `autoexec.cfg`, and have the directory correct in `settings.cfg`.
+X11 environments should run fine once the appropriate packes are installed and you have set the appropriate keybind in your TF2 `autoexec.cfg`.
 
 ### Wayland
 
 Some Wayland environments will not allow `libinput` access to `/dev/uinput` without root.
 
-To fix this you can either run the tf2_bot_kicker as root with sudo, or grant access to `/dev/uinput` with `chmod +0666 /dev/uinput` before running the program (This command will not persist after restart and will need to be run each time before using this program, for a more permanent solution you can follow the instructions under "Without X11" at https://crates.io/crates/tfc).
+To fix this you can either run the program as root with sudo, or grant access to `/dev/uinput` with `chmod +0666 /dev/uinput` before running the program (This command will not persist after restart and will need to be run each time before using this program, for a more permanent solution you can follow the instructions under "Without X11" at https://crates.io/crates/tfc).
 
 
 # Settings and Configuration
