@@ -2,7 +2,7 @@ use std::{time::SystemTime, fs::read_dir};
 
 use chrono::{Local, DateTime};
 use clipboard::{ClipboardProvider, ClipboardContext};
-use eframe::{egui::{self, Ui, Color32}, epi};
+use eframe::{egui::{self, Ui, Color32, RichText}, epi};
 
 pub mod timer;
 use regex::Regex;
@@ -363,6 +363,8 @@ impl epi::App for TF2BotKicker {
                 ui.label("");
                 ui.heading("Bot Detection Rules");
 
+                ui.checkbox(&mut self.settings.record_steamids, &format!("Automatically append bot steamids to {}", DEFAULT_STEAMID_LIST));
+
                 ui.collapsing("Regex Lists", |ui| {
                     let mut ind: Option<usize> = None;
                     for (i, l) in self.settings.regex_lists.iter().enumerate() {
@@ -466,23 +468,10 @@ impl epi::App for TF2BotKicker {
 
                         egui::ScrollArea::vertical().show(ui, |ui| {
 
-                            egui::Grid::new("players").striped(true).show(ui, |ui| {
-
-                                let mut team1 = Vec::new();
-                                let mut team2 = Vec::new();
-
-                                // Get players for each team
-                                for (_, p) in &mut self.server.players {
-                                    if p.team == Team::Invaders {
-                                        team1.push(p);
-                                    } else if p.team == Team::Defenders {
-                                        team2.push(p);
-                                    }
-
-                                }
+                            ui.columns(2, |cols| {
 
                                 // Headings
-                                ui.horizontal(|ui| {
+                                cols[0].horizontal(|ui| {
                                     ui.set_width(width);
                                     ui.colored_label(Color32::WHITE, "Player Name");
                             
@@ -494,7 +483,8 @@ impl epi::App for TF2BotKicker {
                                         });
                                     });
                                 });
-                                ui.horizontal(|ui| {
+
+                                cols[1].horizontal(|ui| {
                                     ui.set_width(width);
                                     ui.colored_label(Color32::WHITE, "Player Name");
                             
@@ -506,32 +496,19 @@ impl epi::App for TF2BotKicker {
                                         });
                                     });
                                 });
-                                ui.end_row();
 
-                                // Show players
-                                let mut i = 0usize;
-                                loop {
+                                for (_, p) in &mut self.server.players {
 
-                                    if team1.get(i).is_none() && team2.get(i).is_none() {
-                                        break;
+                                    if p.team == Team::Invaders {
+                                        render_player(&mut cols[0], &self.settings, &mut self.message, p, width);
                                     }
 
-                                    match team1.get_mut(i) {
-                                        Some(p) => {
-                                            render_player(ui, &self.settings, &mut self.message, *p, width);
-                                        },
-                                        None => {}
+                                    if p.team == Team::Defenders {
+                                        render_player(&mut cols[1], &self.settings, &mut self.message, p, width);
                                     }
-                                    match team2.get_mut(i) {
-                                        Some(p) => {
-                                            render_player(ui, &self.settings, &mut self.message, *p, width);
-                                        },
-                                        None => {}
-                                    }
-                                    ui.end_row();
 
-                                    i += 1;
                                 }
+
                             });
                         });
                     }
@@ -616,34 +593,64 @@ const TRUNC_LEN: usize = 20;
 
 // Ui for a player
 fn render_player(ui: &mut Ui, set: &Settings, mes: &mut String, p: &mut Player, width: f32) {
+
+
     ui.horizontal(|ui| {
         ui.set_width(width);
 
         let text;
         if p.steamid == set.user {
-            text = egui::RichText::new(truncate(&p.name, TRUNC_LEN)).color(Color32::LIGHT_GREEN);
+            text = egui::RichText::new(truncate(&p.name, TRUNC_LEN)).color(Color32::GREEN);
         } else if p.bot {
             text = egui::RichText::new(truncate(&p.name, TRUNC_LEN)).color(Color32::RED);
         } else {
             text = egui::RichText::new(truncate(&p.name, TRUNC_LEN));
         }
 
-        let lab = ui.selectable_label(false, text);
-        if lab.clicked() {
-            let ctx: Result<ClipboardContext, Box<dyn std::error::Error>> = ClipboardProvider::new();
-            ctx.unwrap().set_contents(p.name.clone()).unwrap();
-            mes.clear();
-            mes.push_str(&format!("Copied \"{}\"", p.name));
-        }
-        if lab.secondary_clicked() {
-            let ctx: Result<ClipboardContext, Box<dyn std::error::Error>> = ClipboardProvider::new();
-            ctx.unwrap().set_contents(p.steamid.clone()).unwrap();
-            mes.clear();
-            mes.push_str(&format!("Copied \"{}\"", p.steamid));        }
-        if lab.middle_clicked() {
-            p.bot = !p.bot;
-        }
-        lab.on_hover_text(&format!("Left: Copy Name, Right: Copy SteamID, Middle: Mark as {}Bot", match p.bot {true => "NOT ", false => ""}));
+        ui.collapsing(text, |ui| {
+
+            let prefix = match p.bot {true => "NOT ", false => ""};
+            let mut text = RichText::new(&format!("Mark as {}Bot", prefix));
+            if !p.bot {text = text.color(Color32::LIGHT_RED);}
+            else {text = text.color(Color32::LIGHT_GREEN);}
+
+            if ui.selectable_label(false, text).clicked() {
+                p.bot = !p.bot;
+            }
+
+            ui.horizontal(|ui| {
+                if ui.selectable_label(false, "Copy Name").clicked() {
+                    let ctx: Result<ClipboardContext, Box<dyn std::error::Error>> = ClipboardProvider::new();
+                    ctx.unwrap().set_contents(p.name.clone()).unwrap();
+                    mes.clear();
+                    mes.push_str(&format!("Copied \"{}\"", p.name));
+                }
+                if ui.selectable_label(false, "Copy SteamID").clicked() {
+                    let ctx: Result<ClipboardContext, Box<dyn std::error::Error>> = ClipboardProvider::new();
+                    ctx.unwrap().set_contents(p.steamid.clone()).unwrap();
+                    mes.clear();
+                    mes.push_str(&format!("Copied \"{}\"", p.steamid)); 
+                }
+            });
+
+            if p.bot {
+                ui.horizontal(|ui| {
+                    let lab = ui.selectable_label(false, RichText::new("Save SteamID").color(Color32::LIGHT_RED));
+                    if lab.clicked() {
+                        p.export_steamid();
+                        *mes = format!("Saved {}'s SteamID to {}", &p.name, DEFAULT_STEAMID_LIST);
+                    }
+                    lab.on_hover_text(RichText::new("This player will always be recognized as a bot").color(Color32::RED));
+    
+                    let lab = ui.selectable_label(false, RichText::new("Save Name").color(Color32::LIGHT_RED));
+                    if lab.clicked() {
+                        p.export_regex();
+                        *mes = format!("Saved {}'s Name to {}", &p.name, DEFAULT_REGEX_LIST);
+                    }
+                    lab.on_hover_text(RichText::new("Players with this name will always be recognized as a bot").color(Color32::RED));
+                });
+            }
+        });
 
         ui.with_layout(egui::Layout::right_to_left(), |ui| {
             ui.horizontal(|ui| {

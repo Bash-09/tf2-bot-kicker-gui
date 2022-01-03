@@ -1,8 +1,6 @@
 #![allow(non_upper_case_globals)]
 #![allow(unused_variables)]
 
-use std::{fs::OpenOptions, io::Write};
-
 use crate::server::*;
 
 use regex::{Captures, Regex};
@@ -58,11 +56,13 @@ pub fn f_status(serv: &mut Server, str: &str, caps: Captures, set: &Settings, co
     // Create a new player entry
     } else {
         let name = caps[2].to_string();
+        let mut known_steamid: bool = false;
 
         // Check if they are a bot according to the lists
         let mut bot = false;
         if bot_checker.check_bot_steamid(&steamid) {
             bot = true;
+            known_steamid = true;
 
             if !serv.players.contains_key(&steamid) {
                 println!("Known Bot joining:   {}", name);
@@ -74,17 +74,6 @@ pub fn f_status(serv: &mut Server, str: &str, caps: Captures, set: &Settings, co
                 println!("Unknown bot joining: {} - [{}]", name, steamid);
             }
 
-            // Add suspected bot steamid and name to file
-            let mut file = OpenOptions::new()
-                .write(true)
-                .append(true)
-                .create(true)
-                .open("cfg/recorded_bots.txt")
-                .expect("Failed to open/create cfg/recorded_bots.txt");
-
-            if let Err(e) = write!(file, "\n[{}] - {}", &steamid, &name) {
-                eprintln!("Couldn't write to cfg/recorded_bots.txt: {}", e);
-            }
             bot_checker.append_uuid(steamid.clone());
         }
 
@@ -98,6 +87,7 @@ pub fn f_status(serv: &mut Server, str: &str, caps: Captures, set: &Settings, co
             userid: caps[1].to_string(),
             name,
             steamid,
+            known_steamid,
             time,
             team: Team::None,
             state,
@@ -105,6 +95,10 @@ pub fn f_status(serv: &mut Server, str: &str, caps: Captures, set: &Settings, co
             accounted: true,
             new_connection,
         };
+
+        if set.record_steamids && p.bot && !p.known_steamid {
+            p.export_steamid();
+        }
 
         serv.players.insert(p.steamid.clone(), p);
     }

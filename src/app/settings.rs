@@ -1,6 +1,9 @@
 use inputbot::KeybdKey;
 use serde::{Deserialize, Serialize};
 
+pub const DEFAULT_REGEX_LIST: &str = "regx.txt";
+pub const DEFAULT_STEAMID_LIST: &str = "steamids.txt";
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Settings {
 
@@ -11,6 +14,7 @@ pub struct Settings {
     pub period: f32,
     pub directory: String,
     pub key: KeybdKey,
+    pub record_steamids: bool,
 
     pub uuid_lists: Vec<String>,
     pub regex_lists: Vec<String>,
@@ -28,9 +32,10 @@ impl Settings {
             period: 10.0,
             directory: String::from(""),
             key: KeybdKey::F8Key,
+            record_steamids: true,
 
-            uuid_lists: vec![String::from("cfg/recorded_bots.txt")],
-            regex_lists: vec![String::from("cfg/regx.txt")],
+            uuid_lists: vec![format!("cfg/{}", DEFAULT_STEAMID_LIST)],
+            regex_lists: vec![format!("cfg/{}", DEFAULT_REGEX_LIST)],
         }
     }
 

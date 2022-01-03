@@ -5,13 +5,6 @@ use regex::Regex;
 
 use super::player::Player;
 
-enum ParseType {
-    None,
-    Regex,
-    Uuid,
-    List,
-}
-
 pub struct BotChecker {
     bots_regx: Vec<Regex>,
     bots_uuid: Vec<String>,
@@ -85,7 +78,10 @@ impl BotChecker {
             .unwrap_or_else(|_| panic!("Failed to read file cfg/{} for bot configuration.", filename));
 
         for line in contents.lines() {
-            list.push(Regex::new(line)?);
+            let txt = line.trim();
+            if txt.is_empty() {continue;}
+
+            list.push(Regex::new(txt)?);
         }
 
         self.bots_regx.append(&mut list);
