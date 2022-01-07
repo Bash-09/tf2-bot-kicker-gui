@@ -34,14 +34,6 @@ impl Server {
         self.new_bots.clear();
     }
 
-
-    pub fn list_players(&self) {
-        println!("Listing players:");
-        for p in self.players.values() {
-            println!("Player: {}", p);
-        }
-    }
-
     pub fn get_bots(&self) -> Vec<&Player> {
         let mut bots: Vec<&Player> = Vec::new();
 

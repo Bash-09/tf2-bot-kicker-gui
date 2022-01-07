@@ -64,7 +64,6 @@ impl Default for TF2BotKicker {
             LogMatcher::new(Regex::new(r_lobby).unwrap(), f_lobby),
             LogMatcher::new(Regex::new(r_user_connect).unwrap(), f_user_connect),
             LogMatcher::new(Regex::new(r_user_disconnect).unwrap(), f_user_disconnect),
-            LogMatcher::new(Regex::new(r_list_players).unwrap(), f_list_players),
             LogMatcher::new(Regex::new(r_update).unwrap(), f_update),
             LogMatcher::new(Regex::new(r_inactive).unwrap(), f_inactive),
             LogMatcher::new(Regex::new(r_refresh_complete).unwrap(), f_refresh_complete),

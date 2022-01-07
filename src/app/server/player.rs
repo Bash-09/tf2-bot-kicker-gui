@@ -78,7 +78,7 @@ impl Player {
         .expect(&format!("Failed to Open or Write to cfg/{}", DEFAULT_STEAMID_LIST));
 
         if let Err(e) = write!(file, "\n[{}] - {}", &self.steamid, &self.name) {
-            eprintln!("Failed to Open or Write to cfg/{}", DEFAULT_STEAMID_LIST);
+            eprintln!("Failed to Open or Write to cfg/{}: {}", DEFAULT_STEAMID_LIST, e);
         }
 
         println!("Exported \"[{}] - {}\"", &self.steamid, &self.name);
@@ -96,7 +96,7 @@ impl Player {
         let regx = regex::escape(&self.name);
 
         if let Err(e) = write!(file, "\n{}", regx) {
-            eprintln!("Failed to Open or Write to cfg/{}", DEFAULT_REGEX_LIST);
+            eprintln!("Failed to Open or Write to cfg/{}: {}", DEFAULT_REGEX_LIST, e);
         }
 
         println!("Exported \"{}\"", regx);

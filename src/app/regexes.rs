@@ -164,11 +164,6 @@ pub fn f_user_disconnect(serv: &mut Server, str: &str, caps: Captures, set: &Set
     serv.clear();
 }
 
-pub const r_list_players: &str = r#"^players\s*$"#;
-pub fn f_list_players(serv: &mut Server, str: &str, caps: Captures, set: &Settings, com: &mut Commander, paused: &mut bool, bot_checker: &mut BotChecker) {
-    serv.list_players();
-}
-
 // Indicates all commands have been run server info updated and is ready to be cleared of old players
 pub const r_refresh_complete: &str = r#"^refreshcomplete\s*$"#;
 pub fn f_refresh_complete(serv: &mut Server, str: &str, caps: Captures, set: &Settings, com: &mut Commander, paused: &mut bool, bot_checker: &mut BotChecker) {
