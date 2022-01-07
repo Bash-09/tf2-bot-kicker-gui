@@ -21,11 +21,7 @@ Should work without issue.
 
 Linux users may have to install some of the following packages. (As listed in the Ubuntu repository)
 
-`librust-gdk-dev`\
-`libudev-dev`\
-`libinput-dev`
-
-X11 environments should run fine once the appropriate packes are installed and you have set the appropriate keybind in your TF2 `autoexec.cfg`.
+`libinput-bin`
 
 ### Wayland
 
@@ -47,7 +43,7 @@ To reset your settings, delete the `settings.json` file in the `cfg` folder.
 
 Notes:
 1. I encourage you to not leave Chat Reminders on if the period is reasonably low (maybe 30 seconds?) as that may be annoying for the other players, find a balance or turn reminders off. I personally play with no Chat Reminders or Join Alerts at a period of 10 seconds.
-2. It is recommended to use a key that isn't used much by other programs such as F8, as to avoid it potentially being annoying if it is pressed when you have the game tabbed-out or similar. 
+2. It is recommended to use a key that isn't used much by other programs such as F8, as to avoid it potentially being pressed when you have the game tabbed-out or similar. Although the program will automatically pause and start when you connect/disconnect from a server so this only applies if you are tabbed-out during a game (or switching server).
 
 ## Bot identification
 
@@ -60,6 +56,8 @@ This program should build without issue through Cargo on Windows.
 
 On Linux some libraries may need to be installed. (As listed in the Ubuntu repository)
 
+`librust-gdk-dev`\
+`libudev-dev`\
 `libxcb-render0-dev`\
 `libxcb-shape0-dev`\
 `libxcb-xfixes0-dev`
