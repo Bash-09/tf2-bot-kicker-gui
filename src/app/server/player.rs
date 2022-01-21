@@ -98,12 +98,16 @@ impl Player {
                 DEFAULT_REGEX_LIST
             ));
 
-        let regx = regex::escape(&self.name);
+        let regx = self.get_regex();
 
         if let Err(_) = write!(file, "\n{}", regx) {
             eprintln!("Failed to Open or Write to cfg/{}", DEFAULT_REGEX_LIST);
         }
 
         println!("Exported \"{}\"", regx);
+    }
+
+    pub fn get_regex(&self) -> String {
+        regex::escape(&self.name)
     }
 }

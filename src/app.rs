@@ -568,11 +568,11 @@ impl glium_app::Application for TF2BotKicker {
                                         for (_, p) in &mut self.server.players {
 
                                             if p.team == Team::Invaders {
-                                                render_player(&mut cols[0], &self.settings, &mut self.message, p, width);
+                                                render_player(&mut cols[0], &self.settings, &mut self.bot_checker, &mut self.message, p, width);
                                             }
 
                                             if p.team == Team::Defenders {
-                                                render_player(&mut cols[1], &self.settings, &mut self.message, p, width);
+                                                render_player(&mut cols[1], &self.settings, &mut self.bot_checker, &mut self.message, p, width);
                                             }
 
                                         }
@@ -671,7 +671,7 @@ fn format_time(time: u32) -> String {
 const TRUNC_LEN: usize = 20;
 
 // Ui for a player
-fn render_player(ui: &mut Ui, set: &Settings, mes: &mut String, p: &mut Player, width: f32) {
+fn render_player(ui: &mut Ui, set: &Settings, bc: &mut BotChecker, mes: &mut String, p: &mut Player, width: f32) {
     ui.horizontal(|ui| {
         ui.set_width(width);
 
@@ -725,6 +725,7 @@ fn render_player(ui: &mut Ui, set: &Settings, mes: &mut String, p: &mut Player, 
                     );
                     if lab.clicked() {
                         p.export_steamid();
+                        bc.bots_uuid.push(p.steamid.clone());
                         *mes = format!("Saved {}'s SteamID to {}", &p.name, DEFAULT_STEAMID_LIST);
                     }
                     lab.on_hover_text(
@@ -738,6 +739,7 @@ fn render_player(ui: &mut Ui, set: &Settings, mes: &mut String, p: &mut Player, 
                     );
                     if lab.clicked() {
                         p.export_regex();
+                        bc.bots_regx.push(Regex::new(&p.get_regex()).unwrap());
                         *mes = format!("Saved {}'s Name to {}", &p.name, DEFAULT_REGEX_LIST);
                     }
                     lab.on_hover_text(

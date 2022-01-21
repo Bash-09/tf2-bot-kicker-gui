@@ -6,8 +6,8 @@ use regex::Regex;
 use super::player::Player;
 
 pub struct BotChecker {
-    bots_regx: Vec<Regex>,
-    bots_uuid: Vec<String>,
+    pub bots_regx: Vec<Regex>,
+    pub bots_uuid: Vec<String>,
 }
 
 impl BotChecker {
