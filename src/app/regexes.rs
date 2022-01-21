@@ -7,15 +7,15 @@ use regex::{Captures, Regex};
 
 use crate::server::player::*;
 
-use super::{settings::Settings, console::commander::Commander, bot_checker::BotChecker};
+use super::{bot_checker::BotChecker, settings::Settings};
 
 pub struct LogMatcher {
     pub r: Regex,
-    pub f: fn(serv: &mut Server, str: &str, caps: Captures, set: &Settings, com: &mut Commander, paused: &mut bool, bot_checker: &mut BotChecker),
+    pub f: fn(serv: &mut Server, str: &str, caps: Captures, set: &Settings, bot_checker: &mut BotChecker),
 }
 
 impl LogMatcher {
-    pub fn new(r: Regex, f: fn(serv: &mut Server, str: &str, caps: Captures, set: &Settings, com: &mut Commander, paused: &mut bool, bot_checker: &mut BotChecker)) -> LogMatcher {
+    pub fn new(r: Regex, f: fn(serv: &mut Server, str: &str, caps: Captures, set: &Settings, bot_checker: &mut BotChecker)) -> LogMatcher {
         LogMatcher { r, f }
     }
 }
@@ -36,7 +36,7 @@ impl LogMatcher {
 // If no player exists on the server with a steamid from here, it creates a new player and adds it to the list
 pub const r_status: &str =
     r#"^#\s*(\d+)\s"(.*)"\s+\[(U:\d:\d+)\]\s+(\d*:?\d\d:\d\d)\s+\d+\s*\d+\s*(\w+).*$"#;
-pub fn f_status(serv: &mut Server, str: &str, caps: Captures, set: &Settings, com: &mut Commander, paused: &mut bool, bot_checker: &mut BotChecker) {
+pub fn f_status(serv: &mut Server, str: &str, caps: Captures, set: &Settings, bot_checker: &mut BotChecker) {
     let steamid = caps[3].to_string();
 
     let mut state = State::Spawning;
@@ -128,7 +128,7 @@ fn get_time(input: String) -> u32 {
 // be used to reliably check which team the user is on, it can only check relative to the user (same/opposite team)
 pub const r_lobby: &str =
     r#"^  Member\[(\d+)] \[(U:\d:\d+)]  team = TF_GC_TEAM_(\w+)  type = MATCH_PLAYER\s*$"#;
-pub fn f_lobby(serv: &mut Server, str: &str, caps: Captures, set: &Settings, com: &mut Commander, paused: &mut bool, bot_checker: &mut BotChecker) {
+pub fn f_lobby(serv: &mut Server, str: &str, caps: Captures, set: &Settings, bot_checker: &mut BotChecker) {
     let mut team = Team::None;
 
     match &caps[3] {
@@ -149,42 +149,4 @@ pub fn f_lobby(serv: &mut Server, str: &str, caps: Captures, set: &Settings, com
             }
         }
     }
-}
-
-pub const r_user_connect: &str = r#"^Connected to .*"#;
-pub fn f_user_connect(serv: &mut Server, str: &str, caps: Captures, set: &Settings, com: &mut Commander, paused: &mut bool, bot_checker: &mut BotChecker) {
-    println!("Connected to server.");
-    *paused = false;
-}
-
-pub const r_user_disconnect: &str = r#"^Disconnecting from .*"#;
-pub fn f_user_disconnect(serv: &mut Server, str: &str, caps: Captures, set: &Settings, com: &mut Commander, paused: &mut bool, bot_checker: &mut BotChecker) {
-    println!("Disconnected from server.");
-    *paused = true;
-    serv.clear();
-}
-
-pub const r_list_players: &str = r#"^players\s*$"#;
-pub fn f_list_players(serv: &mut Server, str: &str, caps: Captures, set: &Settings, com: &mut Commander, paused: &mut bool, bot_checker: &mut BotChecker) {
-    serv.list_players();
-}
-
-// Indicates all commands have been run server info updated and is ready to be cleared of old players
-pub const r_refresh_complete: &str = r#"^refreshcomplete\s*$"#;
-pub fn f_refresh_complete(serv: &mut Server, str: &str, caps: Captures, set: &Settings, com: &mut Commander, paused: &mut bool, bot_checker: &mut BotChecker) {
-    serv.prune(set, com);
-}
-
-// Indicates old players have been removed and action can be taken against still-existing bots
-pub const r_update: &str = r#"^prunecomplete\s*$"#;
-pub fn f_update(serv: &mut Server, str: &str, caps: Captures, set: &Settings, com: &mut Commander, paused: &mut bool, bot_checker: &mut BotChecker) {
-    serv.kick_bots(set, com);
-    serv.announce_bots(set, com);
-}
-
-// Indicates the player is not currently in a casual lobby and to pause the program until they are
-pub const r_inactive: &str = r#"^Failed to find lobby shared object\s*$"#;
-pub fn f_inactive(serv: &mut Server, str: &str, caps: Captures, set: &Settings, com: &mut Commander, paused: &mut bool, bot_checker: &mut BotChecker) {
-    println!("User is not connected to a valid server, pausing until a server is joined.");
-    *paused = true;
 }

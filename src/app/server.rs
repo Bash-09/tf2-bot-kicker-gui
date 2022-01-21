@@ -6,8 +6,9 @@ pub mod player;
 use player::Player;
 use player::Team;
 use player::State;
+use rcon::Connection;
+use tokio::net::TcpStream;
 
-use super::commander::Commander;
 use super::settings::Settings;
 
 pub const COM_STATUS: &str = "status";
@@ -15,8 +16,6 @@ pub const COM_LOBBY: &str = "tf_lobby_debug";
 
 pub struct Server {
     pub players: HashMap<String, Player>,
-    // pub com: Commander,
-    // pub bot_checker: BotChecker,
     pub new_bots: Vec<(String, Team)>,
 }
 
@@ -24,7 +23,6 @@ impl Server {
     pub fn new() -> Server {
         Server {
             players: HashMap::with_capacity(24),
-            // bot_checker: BotChecker::new(),
             new_bots: Vec::new(),
         }
     }
@@ -57,7 +55,7 @@ impl Server {
     /// Call a votekick on any players detected as bots.
     /// If userid is set in cfg/settings.cfg then it will only attempt to call vote on bots in the same team
     /// There is no way of knowing if a vote is in progress or the user is on cooldown so votes will still be attempted
-    pub fn kick_bots(&mut self, set: &Settings, com: &mut Commander) {
+    pub async fn kick_bots(&mut self, set: &Settings, rcon: &mut Connection<TcpStream>) {
 
         if !set.kick {
             return;
@@ -79,18 +77,18 @@ impl Server {
             match self.players.get(&set.user) {
                 Some(user) => {
                     if user.team == p.team {
-                        com.kick(p, set);
+                        rcon.cmd(&format!("callvote kick {}", p.userid)).await;
                     }
                 },
                 None => {
-                    com.kick(p, set);
+                    rcon.cmd(&format!("callvote kick {}", p.userid)).await;
                 }
             }
         }
     }
 
     /// Print bots to console and send chat message in-game if necessary of current bots
-    pub fn announce_bots(&mut self, set: &Settings, com: &mut Commander) {
+    pub async fn announce_bots(&mut self, set: &Settings, rcon: &mut Connection<TcpStream>) {
         let mut bots: Vec<String> = Vec::new();
         let mut new: bool = false;
 
@@ -211,30 +209,26 @@ impl Server {
         }
 
         // Broadcast message
-        com.say(&alert, set);
+        rcon.cmd(&format!("say \"{}\"", alert)).await;
     }
 
     /// Update local info on server players
-    pub fn refresh(&mut self, set: &Settings, com: &mut Commander) {
+    pub fn refresh(&mut self) {
         println!("Refreshing server.");
 
         for p in self.players.values_mut().into_iter() {
             p.accounted = false;
         }
-
-        com.run_command(&format!("{}; wait 200; {}; wait 100; echo refreshcomplete", COM_STATUS, COM_LOBBY), &set.key);
     }
 
     /// Remove players who aren't present on the server anymore
     /// (This method will be called automatically in a rexes command)
-    pub fn prune(&mut self, set: &Settings, com: &mut Commander) {
+    pub fn prune(&mut self, set: &Settings) {
         self.players.retain(|_, v| {
             if !v.accounted && v.bot {
                 println!("Bot disconnected: {}", v.name);
             }
             v.accounted
         });
-
-        com.run_command("wait 100; echo prunecomplete", &set.key);
     }
 }

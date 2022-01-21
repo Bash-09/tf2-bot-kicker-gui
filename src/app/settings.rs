@@ -11,9 +11,13 @@ pub struct Settings {
     pub join_alert: bool,
     pub chat_reminders: bool,
     pub kick: bool,
-    pub period: f32,
-    pub directory: String,
-    pub key: KeybdKey,
+
+    pub refresh_period: f32,
+    pub kick_period: f32,
+    pub alert_period: f32,
+
+    pub rcon_password: String,
+
     pub record_steamids: bool,
 
     pub uuid_lists: Vec<String>,
@@ -29,9 +33,13 @@ impl Settings {
             join_alert: false,
             chat_reminders: false,
             kick: true,
-            period: 10.0,
-            directory: String::from(""),
-            key: KeybdKey::F8Key,
+
+            refresh_period: 5.0,
+            kick_period: 10.0,
+            alert_period: 20.0,
+
+            rcon_password: String::from("tf2bk"),
+
             record_steamids: true,
 
             uuid_lists: vec![format!("cfg/{}", DEFAULT_STEAMID_LIST)],
