@@ -16,13 +16,15 @@ use settings::*;
 pub mod server;
 use server::*;
 
-use tokio::net::TcpStream;
+use tokio::{net::TcpStream, runtime::Runtime};
 
 mod regexes;
-use self::{regexes::*, server::player::{Team, Player, State}};
+use self::{regexes::*, server::player::{Team, Player, State}, logwatcher::LogWatcher};
 
 pub mod bot_checker;
 use bot_checker::*;
+
+pub mod logwatcher;
 
 use glium_app::{context::Context, Surface};
 
@@ -36,6 +38,7 @@ pub struct TF2BotKicker {
 
     settings: Settings,
     rcon: rcon::Result<Connection<TcpStream>>,
+    log: Option<LogWatcher>,
 
     server: Server,
 
@@ -83,6 +86,7 @@ impl TF2BotKicker {
         }
 
         let rcon = Connection::connect("127.0.0.1:27015", &settings.rcon_password).await;
+        let log = LogWatcher::use_directory(&settings.tf2_directory);
 
         Self {
             refresh_timer: Timer::new(),
@@ -91,8 +95,8 @@ impl TF2BotKicker {
             message,
             settings,
             rcon,
+            log,
             server: Server::new(),
-
             regx_status,
             regx_lobby,
 
@@ -135,6 +139,9 @@ impl TF2BotKicker {
         let status = self.rcon.as_mut().unwrap().cmd("status").await;
         let lobby = self.rcon.as_mut().unwrap().cmd("tf_lobby_debug").await;
 
+        println!("{:?}", status);
+        println!("{:?}", lobby);
+
         if status.is_err() || lobby.is_err() {return;}
 
         let status = status.unwrap();
@@ -165,6 +172,8 @@ impl TF2BotKicker {
             }
         }
 
+        self.server.prune(&self.settings);
+
     }
 }
 
@@ -187,8 +196,6 @@ impl glium_app::Application for TF2BotKicker {
 
         let refresh = self.refresh_timer.go(self.settings.refresh_period);
 
-        println!("Updating");
-
         if refresh.is_none() {return;}
 
         self.kick_timer.go(self.settings.kick_period);
@@ -196,14 +203,11 @@ impl glium_app::Application for TF2BotKicker {
 
         // Refresh server
         if self.refresh_timer.update() {
-            println!("Refreshing");
-            self.message = String::from("Refreshing...");
-
             self.refresh().await;
 
             let system_time = SystemTime::now();
             let datetime: DateTime<Local> = system_time.into();
-            self.message = format!("Refreshing... ({})", datetime.format("%T"));
+            self.message = format!("Refreshed ({})", datetime.format("%T"));
         }
 
         // Kick Bots
@@ -236,6 +240,26 @@ impl glium_app::Application for TF2BotKicker {
             egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
                 egui::menu::bar(ui, |ui| {
                     ui.menu_button("File", |ui| {
+
+                        if ui.button("Set TF2 Directory").clicked() {
+                            match rfd::FileDialog::new().pick_folder() {
+                                Some(pb) => {
+                                    let dir;
+                                    match pb.strip_prefix(std::env::current_dir().unwrap()) {
+                                        Ok(pb) => {
+                                            dir = pb.to_string_lossy().to_string();
+                                        },
+                                        Err(_) => {
+                                            dir = pb.to_string_lossy().to_string();
+                                        }
+                                    }
+                                    self.settings.tf2_directory = dir;
+                                    self.log = LogWatcher::use_directory(&self.settings.tf2_directory);
+                                    settings_changed = true;
+                                },
+                                None => {}
+                            }
+                        }
 
                         if ui.button("Add Regex List").clicked() {
                             match rfd::FileDialog::new().set_directory("cfg").pick_file() {
@@ -408,98 +432,139 @@ impl glium_app::Application for TF2BotKicker {
             // Main window with info and players
             egui::CentralPanel::default().show(ctx, |ui| {
 
-                match &self.rcon {
-                    // Connected and good
-                    Ok(_) => {
+                if self.log.is_none() {
 
-                        if self.server.players.is_empty() {
-                            ui.label("Not currently connected to a server.");
-                        } else {
+                    ui.label("No valid TF2 directory set. (It should be the one inside \"common\")\n\n");
 
-                            let width = (ui.available_width()-5.0)/2.0;
+                    ui.label("Instructions:");
 
-                            egui::ScrollArea::vertical().show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label("1. Add");
+                        copy_label(&mut self.message, "-condebug -conclearlog", ui);
+                        ui.label("to your TF2 launch options and start the game.");
+                    });
 
-                                ui.columns(2, |cols| {
+                    ui.horizontal(|ui| {
+                        ui.label("2. Click");
+                        if ui.button("Set your TF2 directory").clicked() {
 
-                                    // Headings
-                                    cols[0].horizontal(|ui| {
-                                        ui.set_width(width);
-                                        ui.colored_label(Color32::WHITE, "Player Name");
-                                
-                                        ui.with_layout(egui::Layout::right_to_left(), |ui| {
-                                            ui.horizontal(|ui| {
-                                                ui.label("   ");
-                                                ui.colored_label(Color32::WHITE, "Time");
-                                                ui.colored_label(Color32::WHITE, "Info");
-                                            });
-                                        });
-                                    });
-
-                                    cols[1].horizontal(|ui| {
-                                        ui.set_width(width);
-                                        ui.colored_label(Color32::WHITE, "Player Name");
-                                
-                                        ui.with_layout(egui::Layout::right_to_left(), |ui| {
-                                            ui.horizontal(|ui| {
-                                                ui.label("   ");
-                                                ui.colored_label(Color32::WHITE, "Time");
-                                                ui.colored_label(Color32::WHITE, "Info");
-                                            });
-                                        });
-                                    });
-
-                                    for (_, p) in &mut self.server.players {
-
-                                        if p.team == Team::Invaders {
-                                            render_player(&mut cols[0], &self.settings, &mut self.message, p, width);
+                            match rfd::FileDialog::new().pick_folder() {
+                                Some(pb) => {
+                                    let dir;
+                                    match pb.strip_prefix(std::env::current_dir().unwrap()) {
+                                        Ok(pb) => {
+                                            dir = pb.to_string_lossy().to_string();
+                                        },
+                                        Err(_) => {
+                                            dir = pb.to_string_lossy().to_string();
                                         }
-
-                                        if p.team == Team::Defenders {
-                                            render_player(&mut cols[1], &self.settings, &mut self.message, p, width);
-                                        }
-
                                     }
-
-                                });
-                            });
+                                    self.settings.tf2_directory = dir;
+                                    self.log = LogWatcher::use_directory(&self.settings.tf2_directory);
+                                    settings_changed = true;
+                                },
+                                None => {}
+                            }
                         }
-                    },
+                        ui.label("and navigate to your Team Fortress 2 folder");
+                    });
+                    ui.label("3. Start the program and enjoy the game!\n\n");
+                    ui.label("Note: If you have set your TF2 directory but are still seeing this message, ensure you have added the launch options and launched the game before trying again.");
 
-                    // RCON couldn't connect
-                    Err(e) => {
-                        match e {
-                            // Wrong password
-                            rcon::Error::Auth => {
-                                ui.heading("Failed to authorise RCON - Password incorrect");
 
-                                ui.horizontal(|ui| {
-                                    ui.label("Run ");
-                                    copy_label(&mut self.message, &format!("rcon_password {}", &self.settings.rcon_password), ui);
-                                    ui.label(" in your TF2 console, and make sure it is in your autoexec.cfg file.");
-                                });
-                            },
-                            // Connection issue
-                            _ => {
-                                ui.heading("Could not connect to TF2!");
+                } else {
+                    match &self.rcon {
+                        // Connected and good
+                        Ok(_) => {
 
-                                ui.label("Possible issues:");
-                                ui.label("Is TF2 running?");
-                                ui.horizontal(|ui| {
-                                    ui.label("Does your autoexec.cfg file contain ");
-                                    copy_label(&mut self.message, "net_start", ui);
-                                    ui.label("?");
+                            if self.server.players.is_empty() {
+                                ui.label("Not currently connected to a server.");
+                            } else {
+
+                                let width = (ui.available_width()-5.0)/2.0;
+
+                                egui::ScrollArea::vertical().show(ui, |ui| {
+
+                                    ui.columns(2, |cols| {
+
+                                        // Headings
+                                        cols[0].horizontal(|ui| {
+                                            ui.set_width(width);
+                                            ui.colored_label(Color32::WHITE, "Player Name");
+                                    
+                                            ui.with_layout(egui::Layout::right_to_left(), |ui| {
+                                                ui.horizontal(|ui| {
+                                                    ui.label("   ");
+                                                    ui.colored_label(Color32::WHITE, "Time");
+                                                    ui.colored_label(Color32::WHITE, "Info");
+                                                });
+                                            });
+                                        });
+
+                                        cols[1].horizontal(|ui| {
+                                            ui.set_width(width);
+                                            ui.colored_label(Color32::WHITE, "Player Name");
+                                    
+                                            ui.with_layout(egui::Layout::right_to_left(), |ui| {
+                                                ui.horizontal(|ui| {
+                                                    ui.label("   ");
+                                                    ui.colored_label(Color32::WHITE, "Time");
+                                                    ui.colored_label(Color32::WHITE, "Info");
+                                                });
+                                            });
+                                        });
+
+                                        for (_, p) in &mut self.server.players {
+
+                                            if p.team == Team::Invaders {
+                                                render_player(&mut cols[0], &self.settings, &mut self.message, p, width);
+                                            }
+
+                                            if p.team == Team::Defenders {
+                                                render_player(&mut cols[1], &self.settings, &mut self.message, p, width);
+                                            }
+
+                                        }
+
+                                    });
                                 });
-                                ui.horizontal(|ui| {
-                                    ui.label("Do your TF2 launch option include ");
-                                    copy_label(&mut self.message, "-usercon", ui);
-                                    ui.label("?");
-                                });
+                            }
+                        },
+
+                        // RCON couldn't connect
+                        Err(e) => {
+                            match e {
+                                // Wrong password
+                                rcon::Error::Auth => {
+                                    ui.heading("Failed to authorise RCON - Password incorrect");
+
+                                    ui.horizontal(|ui| {
+                                        ui.label("Run ");
+                                        copy_label(&mut self.message, &format!("rcon_password {}", &self.settings.rcon_password), ui);
+                                        ui.label("in your TF2 console, and make sure it is in your autoexec.cfg file.");
+                                    });
+                                },
+                                // Connection issue
+                                _ => {
+                                    ui.heading("Could not connect to TF2:");
+
+                                    ui.label("");
+                                    ui.label("Is TF2 running?");
+                                    ui.horizontal(|ui| {
+                                        ui.label("Does your autoexec.cfg file contain");
+                                        copy_label(&mut self.message, "net_start", ui);
+                                        ui.label("?");
+                                    });
+                                    ui.horizontal(|ui| {
+                                        ui.label("Do your TF2 launch option include ");
+                                        copy_label(&mut self.message, "-usercon", ui);
+                                        ui.label("?");
+                                    });
+                                }
                             }
                         }
                     }
                 }
-
             });
 
             // Export settings if they've changed

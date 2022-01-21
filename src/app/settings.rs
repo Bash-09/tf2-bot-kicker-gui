@@ -17,6 +17,7 @@ pub struct Settings {
     pub alert_period: f32,
 
     pub rcon_password: String,
+    pub tf2_directory: String,
 
     pub record_steamids: bool,
 
@@ -39,6 +40,7 @@ impl Settings {
             alert_period: 20.0,
 
             rcon_password: String::from("tf2bk"),
+            tf2_directory: String::new(),
 
             record_steamids: true,
 
