@@ -12,7 +12,7 @@ pub struct BotChecker {
 
 impl BotChecker {
     pub fn new() -> BotChecker {
-        BotChecker{
+        BotChecker {
             bots_regx: Vec::new(),
             bots_uuid: Vec::new(),
         }
@@ -36,6 +36,7 @@ impl BotChecker {
         false
     }
 
+    #[allow(dead_code)]
     pub fn check_bot(&self, p: &Player) -> bool {
         self.check_bot_steamid(&p.steamid) || self.check_bot_name(&p.name)
     }
@@ -52,8 +53,12 @@ impl BotChecker {
         let mut file = File::open(filename)?;
 
         let mut contents: String = String::new();
-        file.read_to_string(&mut contents)
-            .unwrap_or_else(|_| panic!("Failed to read file cfg/{} for bot configuration.", filename));
+        file.read_to_string(&mut contents).unwrap_or_else(|_| {
+            panic!(
+                "Failed to read file cfg/{} for bot configuration.",
+                filename
+            )
+        });
 
         for m in reg.find_iter(&contents) {
             match reg.captures(m.as_str()) {
@@ -74,12 +79,18 @@ impl BotChecker {
         let mut file = File::open(filename)?;
 
         let mut contents: String = String::new();
-        file.read_to_string(&mut contents)
-            .unwrap_or_else(|_| panic!("Failed to read file cfg/{} for bot configuration.", filename));
+        file.read_to_string(&mut contents).unwrap_or_else(|_| {
+            panic!(
+                "Failed to read file cfg/{} for bot configuration.",
+                filename
+            )
+        });
 
         for line in contents.lines() {
             let txt = line.trim();
-            if txt.is_empty() {continue;}
+            if txt.is_empty() {
+                continue;
+            }
 
             list.push(Regex::new(txt)?);
         }
@@ -88,5 +99,3 @@ impl BotChecker {
         Ok(())
     }
 }
-
-

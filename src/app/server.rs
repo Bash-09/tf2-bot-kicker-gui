@@ -4,8 +4,8 @@ use std::collections::HashMap;
 
 pub mod player;
 use player::Player;
-use player::Team;
 use player::State;
+use player::Team;
 use rcon::Connection;
 use tokio::net::TcpStream;
 
@@ -32,7 +32,6 @@ impl Server {
         self.new_bots.clear();
     }
 
-
     pub fn list_players(&self) {
         println!("Listing players:");
         for p in self.players.values() {
@@ -56,7 +55,6 @@ impl Server {
     /// If userid is set in cfg/settings.cfg then it will only attempt to call vote on bots in the same team
     /// There is no way of knowing if a vote is in progress or the user is on cooldown so votes will still be attempted
     pub async fn kick_bots(&mut self, set: &Settings, rcon: &mut Connection<TcpStream>) {
-
         if !set.kick {
             return;
         }
@@ -77,11 +75,11 @@ impl Server {
             match self.players.get(&set.user) {
                 Some(user) => {
                     if user.team == p.team {
-                        rcon.cmd(&format!("callvote kick {}", p.userid)).await;
+                        let _cmd = rcon.cmd(&format!("callvote kick {}", p.userid)).await;
                     }
-                },
+                }
                 None => {
-                    rcon.cmd(&format!("callvote kick {}", p.userid)).await;
+                    let _cmd = rcon.cmd(&format!("callvote kick {}", p.userid)).await;
                 }
             }
         }
@@ -175,7 +173,7 @@ impl Server {
                         } else {
                             alert.push_str("BOTS joining enemy team: ");
                         }
-                    },
+                    }
                     None => {
                         alert.push_str("BOTS joining: ");
                     }
@@ -195,7 +193,7 @@ impl Server {
                         } else {
                             alert.push_str("BOT Alert: Enemy team has BOTS: ");
                         }
-                    },
+                    }
                     None => {
                         alert.push_str("BOT Alert: The server has BOTS: ");
                     }
@@ -209,7 +207,7 @@ impl Server {
         }
 
         // Broadcast message
-        rcon.cmd(&format!("say \"{}\"", alert)).await;
+        let _cmd = rcon.cmd(&format!("say \"{}\"", alert)).await;
     }
 
     /// Update local info on server players
@@ -223,7 +221,7 @@ impl Server {
 
     /// Remove players who aren't present on the server anymore
     /// (This method will be called automatically in a rexes command)
-    pub fn prune(&mut self, set: &Settings) {
+    pub fn prune(&mut self) {
         self.players.retain(|_, v| {
             if !v.accounted && v.bot {
                 println!("Bot disconnected: {}", v.name);

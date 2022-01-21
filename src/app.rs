@@ -1,11 +1,11 @@
-use std::{time::SystemTime, fs::read_dir, ops::RangeInclusive};
+use std::{ops::RangeInclusive, time::SystemTime};
 
 use async_trait::async_trait;
-use chrono::{Local, DateTime};
-use clipboard::{ClipboardProvider, ClipboardContext};
+use chrono::{DateTime, Local};
+use clipboard::{ClipboardContext, ClipboardProvider};
 
 pub mod timer;
-use egui::{Ui, Color32, RichText};
+use egui::{Color32, RichText, Ui};
 use rcon::Connection;
 use regex::Regex;
 use timer::*;
@@ -16,20 +16,23 @@ use settings::*;
 pub mod server;
 use server::*;
 
-use tokio::{net::TcpStream, runtime::Runtime};
+use tokio::net::TcpStream;
 
 mod regexes;
-use self::{regexes::*, server::player::{Team, Player, State}, logwatcher::LogWatcher};
+use self::{
+    logwatcher::LogWatcher,
+    regexes::*,
+    server::player::{Player, State, Team},
+};
 
 pub mod bot_checker;
 use bot_checker::*;
 
 pub mod logwatcher;
 
-use glium_app::{context::Context, Surface};
+use glium_app::Surface;
 
 pub struct TF2BotKicker {
-
     refresh_timer: Timer,
     kick_timer: Timer,
     alert_timer: Timer,
@@ -44,16 +47,14 @@ pub struct TF2BotKicker {
 
     regx_status: LogMatcher,
     regx_lobby: LogMatcher,
+    regx_disconnect: LogMatcher,
 
     bot_checker: BotChecker,
-
 }
 
 impl TF2BotKicker {
-
     // Create the application
     pub async fn new() -> TF2BotKicker {
-
         let settings: Settings;
 
         // Attempt to load settings, create new default settings if it can't load an existing file
@@ -67,6 +68,8 @@ impl TF2BotKicker {
         // Load regexes
         let regx_status = LogMatcher::new(Regex::new(r_status).unwrap(), f_status);
         let regx_lobby = LogMatcher::new(Regex::new(r_lobby).unwrap(), f_lobby);
+        let regx_disconnect =
+            LogMatcher::new(Regex::new(r_user_disconnect).unwrap(), f_user_disconnect);
 
         let mut message = String::from("Loaded");
 
@@ -74,15 +77,15 @@ impl TF2BotKicker {
         let mut bot_checker = BotChecker::new();
         for uuid_list in &settings.uuid_lists {
             match bot_checker.add_steamid_list(uuid_list) {
-                Ok(_) => {},
+                Ok(_) => {}
                 Err(e) => message = format!("Error loading {}: {}", uuid_list, e),
             }
         }
         for regex_list in &settings.regex_lists {
             match bot_checker.add_regex_list(regex_list) {
-                Ok(_) => {},
+                Ok(_) => {}
                 Err(e) => message = format!("Error loading {}: {}", regex_list, e),
-            }        
+            }
         }
 
         let rcon = Connection::connect("127.0.0.1:27015", &settings.rcon_password).await;
@@ -97,34 +100,35 @@ impl TF2BotKicker {
             rcon,
             log,
             server: Server::new(),
+
             regx_status,
             regx_lobby,
+            regx_disconnect,
 
             bot_checker,
         }
     }
 
-
     pub async fn rcon_connected(&mut self) -> bool {
         match &mut self.rcon {
-            Ok(con) => {
-                match con.cmd("echo Ping").await {
-                    Ok(_) => {
-                        return true;
-                    },
-                    Err(e) => {
-                        self.rcon = Err(e);
-                        return false;
-                    }
+            Ok(con) => match con.cmd("echo Ping").await {
+                Ok(_) => {
+                    return true;
+                }
+                Err(e) => {
+                    println!("Error with rcon: {:?}", &e);
+                    self.rcon = Err(e);
+                    return false;
                 }
             },
-            Err(e) => {
+            Err(_) => {
                 match Connection::connect("127.0.0.1:27015", &self.settings.rcon_password).await {
                     Ok(con) => {
                         self.rcon = Ok(con);
                         return true;
-                    },
+                    }
                     Err(e) => {
+                        println!("Error with rcon: {:?}", &e);
                         self.rcon = Err(e);
                         return false;
                     }
@@ -134,18 +138,25 @@ impl TF2BotKicker {
     }
 
     pub async fn refresh(&mut self) {
-        if !self.rcon_connected().await {return;}
+        if !self.rcon_connected().await {
+            return;
+        }
+        self.server.prune();
 
-        let status = self.rcon.as_mut().unwrap().cmd("status").await;
+        let status = self
+            .rcon
+            .as_mut()
+            .unwrap()
+            .cmd("status; wait 200; echo \"refreshcomplete\"")
+            .await;
         let lobby = self.rcon.as_mut().unwrap().cmd("tf_lobby_debug").await;
 
-        println!("{:?}", status);
-        println!("{:?}", lobby);
+        if status.is_err() || lobby.is_err() {
+            return;
+        }
 
-        if status.is_err() || lobby.is_err() {return;}
-
-        let status = status.unwrap();
         let lobby = lobby.unwrap();
+        println!("Lobby:\n {}", lobby);
 
         if lobby.contains("Failed to find lobby shared object") {
             self.server.clear();
@@ -154,26 +165,20 @@ impl TF2BotKicker {
 
         self.server.refresh();
 
-        for l in status.lines() {
-            match self.regx_status.r.captures(l) {
-                None => {},
-                Some(c) => {
-                    (self.regx_status.f)(&mut self.server, l, c, &self.settings, &mut self.bot_checker);
-                }
-            }
-        }
-
         for l in lobby.lines() {
             match self.regx_lobby.r.captures(l) {
-                None => {},
+                None => {}
                 Some(c) => {
-                    (self.regx_lobby.f)(&mut self.server, l, c, &self.settings, &mut self.bot_checker);
+                    (self.regx_lobby.f)(
+                        &mut self.server,
+                        l,
+                        c,
+                        &self.settings,
+                        &mut self.bot_checker,
+                    );
                 }
             }
         }
-
-        self.server.prune(&self.settings);
-
     }
 }
 
@@ -186,17 +191,18 @@ impl glium_app::Application for TF2BotKicker {
             .with_inner_size(glium_app::PhysicalSize::new(800, 350))
     }
 
-    fn init(&mut self, ctx: &mut glium_app::context::Context) {
+    fn init(&mut self, _ctx: &mut glium_app::context::Context) {
         self.refresh_timer.reset();
         self.kick_timer.reset();
         self.alert_timer.reset();
     }
 
     async fn update(&mut self, _t: &glium_app::timer::Timer) {
-
         let refresh = self.refresh_timer.go(self.settings.refresh_period);
 
-        if refresh.is_none() {return;}
+        if refresh.is_none() {
+            return;
+        }
 
         self.kick_timer.go(self.settings.kick_period);
         self.alert_timer.go(self.settings.alert_period);
@@ -210,24 +216,69 @@ impl glium_app::Application for TF2BotKicker {
             self.message = format!("Refreshed ({})", datetime.format("%T"));
         }
 
+        match &mut self.log {
+            Some(lw) => {
+                // If there is a loaded dir, process any new console lines
+                loop {
+                    match lw.next_line() {
+                        Some(line) => {
+                            match self.regx_disconnect.r.captures(&line) {
+                                None => {}
+                                Some(c) => {
+                                    (self.regx_disconnect.f)(
+                                        &mut self.server,
+                                        &line,
+                                        c,
+                                        &self.settings,
+                                        &mut self.bot_checker,
+                                    );
+                                    continue;
+                                }
+                            }
+
+                            match self.regx_status.r.captures(&line) {
+                                Some(c) => {
+                                    (self.regx_status.f)(
+                                        &mut self.server,
+                                        &line,
+                                        c,
+                                        &self.settings,
+                                        &mut self.bot_checker,
+                                    );
+                                    continue;
+                                }
+                                None => {}
+                            }
+                        }
+                        None => {
+                            break;
+                        }
+                    }
+                }
+            }
+            None => {}
+        }
+
         // Kick Bots
         if self.kick_timer.update() {
             if self.rcon_connected().await {
-                self.server.kick_bots(&self.settings, self.rcon.as_mut().unwrap()).await;
+                self.server
+                    .kick_bots(&self.settings, self.rcon.as_mut().unwrap())
+                    .await;
             }
         }
 
         // Send chat alerts
         if self.alert_timer.update() {
             if self.rcon_connected().await {
-                self.server.announce_bots(&self.settings, self.rcon.as_mut().unwrap()).await;
+                self.server
+                    .announce_bots(&self.settings, self.rcon.as_mut().unwrap())
+                    .await;
             }
         }
-
     }
 
     fn render(&mut self, ctx: &mut glium_app::context::Context) {
-
         let mut target = ctx.dis.draw();
         target.clear_color_and_depth((0.5, 0.7, 0.8, 1.0), 1.0);
 
@@ -556,7 +607,7 @@ impl glium_app::Application for TF2BotKicker {
                                         ui.label("?");
                                     });
                                     ui.horizontal(|ui| {
-                                        ui.label("Do your TF2 launch option include ");
+                                        ui.label("Does your TF2 launch option include");
                                         copy_label(&mut self.message, "-usercon", ui);
                                         ui.label("?");
                                     });
@@ -569,7 +620,7 @@ impl glium_app::Application for TF2BotKicker {
 
             // Export settings if they've changed
             if settings_changed {
-                std::fs::create_dir("cfg");
+                let _new_dir = std::fs::create_dir("cfg");
                 match self.settings.export("cfg/settings.json") {
                     Ok(_) => {},
                     Err(e) => {
@@ -583,50 +634,44 @@ impl glium_app::Application for TF2BotKicker {
 
         ctx.gui.paint(&ctx.dis, &mut target, shapes);
         target.finish().unwrap();
-
     }
 
-    fn close(&mut self) {
-
-    }
+    fn close(&mut self) {}
 }
-
 
 // Make a selectable label which copies it's text to the clipboard on click
 fn copy_label(log: &mut String, text: &str, ui: &mut Ui) {
     let lab = ui.selectable_label(false, text);
-        if lab.clicked() {
-            let ctx: Result<ClipboardContext, Box<dyn std::error::Error>> = ClipboardProvider::new();
-            match ctx {
-                Ok(mut ctx) => {
-                    if ctx.set_contents(text.to_string()).is_ok() {
-                        log.clear();
-                        log.push_str(&format!("Copied '{}' to clipboard.", text));
-                    } else {
-                        log.clear();
-                        log.push_str("Couldn't copy text to clipboard");
-                    }
-                },
-                Err(e) => {
+    if lab.clicked() {
+        let ctx: Result<ClipboardContext, Box<dyn std::error::Error>> = ClipboardProvider::new();
+        match ctx {
+            Ok(mut ctx) => {
+                if ctx.set_contents(text.to_string()).is_ok() {
                     log.clear();
-                    log.push_str(&format!("Couldn't copy text to clipboard: {}", e));
+                    log.push_str(&format!("Copied '{}' to clipboard.", text));
+                } else {
+                    log.clear();
+                    log.push_str("Couldn't copy text to clipboard");
                 }
             }
+            Err(e) => {
+                log.clear();
+                log.push_str(&format!("Couldn't copy text to clipboard: {}", e));
+            }
         }
-        lab.on_hover_text("Copy");
+    }
+    lab.on_hover_text("Copy");
 }
 
 // u32 -> minutes:seconds
 fn format_time(time: u32) -> String {
-    format!("{}:{}", time/60, time%60)
+    format!("{}:{}", time / 60, time % 60)
 }
 
 const TRUNC_LEN: usize = 20;
 
 // Ui for a player
 fn render_player(ui: &mut Ui, set: &Settings, mes: &mut String, p: &mut Player, width: f32) {
-
-
     ui.horizontal(|ui| {
         ui.set_width(width);
 
@@ -640,11 +685,16 @@ fn render_player(ui: &mut Ui, set: &Settings, mes: &mut String, p: &mut Player, 
         }
 
         ui.collapsing(text, |ui| {
-
-            let prefix = match p.bot {true => "NOT ", false => ""};
+            let prefix = match p.bot {
+                true => "NOT ",
+                false => "",
+            };
             let mut text = RichText::new(&format!("Mark as {}Bot", prefix));
-            if !p.bot {text = text.color(Color32::LIGHT_RED);}
-            else {text = text.color(Color32::LIGHT_GREEN);}
+            if !p.bot {
+                text = text.color(Color32::LIGHT_RED);
+            } else {
+                text = text.color(Color32::LIGHT_GREEN);
+            }
 
             if ui.selectable_label(false, text).clicked() {
                 p.bot = !p.bot;
@@ -652,34 +702,48 @@ fn render_player(ui: &mut Ui, set: &Settings, mes: &mut String, p: &mut Player, 
 
             ui.horizontal(|ui| {
                 if ui.selectable_label(false, "Copy Name").clicked() {
-                    let ctx: Result<ClipboardContext, Box<dyn std::error::Error>> = ClipboardProvider::new();
+                    let ctx: Result<ClipboardContext, Box<dyn std::error::Error>> =
+                        ClipboardProvider::new();
                     ctx.unwrap().set_contents(p.name.clone()).unwrap();
                     mes.clear();
                     mes.push_str(&format!("Copied \"{}\"", p.name));
                 }
                 if ui.selectable_label(false, "Copy SteamID").clicked() {
-                    let ctx: Result<ClipboardContext, Box<dyn std::error::Error>> = ClipboardProvider::new();
+                    let ctx: Result<ClipboardContext, Box<dyn std::error::Error>> =
+                        ClipboardProvider::new();
                     ctx.unwrap().set_contents(p.steamid.clone()).unwrap();
                     mes.clear();
-                    mes.push_str(&format!("Copied \"{}\"", p.steamid)); 
+                    mes.push_str(&format!("Copied \"{}\"", p.steamid));
                 }
             });
 
             if p.bot {
                 ui.horizontal(|ui| {
-                    let lab = ui.selectable_label(false, RichText::new("Save SteamID").color(Color32::LIGHT_RED));
+                    let lab = ui.selectable_label(
+                        false,
+                        RichText::new("Save SteamID").color(Color32::LIGHT_RED),
+                    );
                     if lab.clicked() {
                         p.export_steamid();
                         *mes = format!("Saved {}'s SteamID to {}", &p.name, DEFAULT_STEAMID_LIST);
                     }
-                    lab.on_hover_text(RichText::new("This player will always be recognized as a bot").color(Color32::RED));
-    
-                    let lab = ui.selectable_label(false, RichText::new("Save Name").color(Color32::LIGHT_RED));
+                    lab.on_hover_text(
+                        RichText::new("This player will always be recognized as a bot")
+                            .color(Color32::RED),
+                    );
+
+                    let lab = ui.selectable_label(
+                        false,
+                        RichText::new("Save Name").color(Color32::LIGHT_RED),
+                    );
                     if lab.clicked() {
                         p.export_regex();
                         *mes = format!("Saved {}'s Name to {}", &p.name, DEFAULT_REGEX_LIST);
                     }
-                    lab.on_hover_text(RichText::new("Players with this name will always be recognized as a bot").color(Color32::RED));
+                    lab.on_hover_text(
+                        RichText::new("Players with this name will always be recognized as a bot")
+                            .color(Color32::RED),
+                    );
                 });
             }
         });
@@ -698,7 +762,6 @@ fn render_player(ui: &mut Ui, set: &Settings, mes: &mut String, p: &mut Player, 
                 }
             });
         });
-
     });
 }
 

@@ -11,11 +11,26 @@ use super::{bot_checker::BotChecker, settings::Settings};
 
 pub struct LogMatcher {
     pub r: Regex,
-    pub f: fn(serv: &mut Server, str: &str, caps: Captures, set: &Settings, bot_checker: &mut BotChecker),
+    pub f: fn(
+        serv: &mut Server,
+        str: &str,
+        caps: Captures,
+        set: &Settings,
+        bot_checker: &mut BotChecker,
+    ),
 }
 
 impl LogMatcher {
-    pub fn new(r: Regex, f: fn(serv: &mut Server, str: &str, caps: Captures, set: &Settings, bot_checker: &mut BotChecker)) -> LogMatcher {
+    pub fn new(
+        r: Regex,
+        f: fn(
+            serv: &mut Server,
+            str: &str,
+            caps: Captures,
+            set: &Settings,
+            bot_checker: &mut BotChecker,
+        ),
+    ) -> LogMatcher {
         LogMatcher { r, f }
     }
 }
@@ -36,7 +51,13 @@ impl LogMatcher {
 // If no player exists on the server with a steamid from here, it creates a new player and adds it to the list
 pub const r_status: &str =
     r#"^#\s*(\d+)\s"(.*)"\s+\[(U:\d:\d+)\]\s+(\d*:?\d\d:\d\d)\s+\d+\s*\d+\s*(\w+).*$"#;
-pub fn f_status(serv: &mut Server, str: &str, caps: Captures, set: &Settings, bot_checker: &mut BotChecker) {
+pub fn f_status(
+    serv: &mut Server,
+    str: &str,
+    caps: Captures,
+    set: &Settings,
+    bot_checker: &mut BotChecker,
+) {
     let steamid = caps[3].to_string();
 
     let mut state = State::Spawning;
@@ -128,7 +149,13 @@ fn get_time(input: String) -> u32 {
 // be used to reliably check which team the user is on, it can only check relative to the user (same/opposite team)
 pub const r_lobby: &str =
     r#"^  Member\[(\d+)] \[(U:\d:\d+)]  team = TF_GC_TEAM_(\w+)  type = MATCH_PLAYER\s*$"#;
-pub fn f_lobby(serv: &mut Server, str: &str, caps: Captures, set: &Settings, bot_checker: &mut BotChecker) {
+pub fn f_lobby(
+    serv: &mut Server,
+    str: &str,
+    caps: Captures,
+    set: &Settings,
+    bot_checker: &mut BotChecker,
+) {
     let mut team = Team::None;
 
     match &caps[3] {
@@ -141,6 +168,7 @@ pub fn f_lobby(serv: &mut Server, str: &str, caps: Captures, set: &Settings, bot
         None => {}
         Some(p) => {
             p.team = team;
+            p.accounted = true;
 
             // Alert server of bot joining the server
             if p.new_connection && p.bot && set.join_alert {
@@ -149,4 +177,16 @@ pub fn f_lobby(serv: &mut Server, str: &str, caps: Captures, set: &Settings, bot
             }
         }
     }
+}
+
+pub const r_user_disconnect: &str = r#"^Disconnecting from .*"#;
+pub fn f_user_disconnect(
+    serv: &mut Server,
+    str: &str,
+    caps: Captures,
+    set: &Settings,
+    bot_checker: &mut BotChecker,
+) {
+    println!("Disconnected from server.");
+    serv.clear();
 }

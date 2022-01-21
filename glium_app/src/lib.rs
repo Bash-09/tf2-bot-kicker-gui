@@ -1,6 +1,4 @@
 
-use std::sync::Mutex;
-
 use egui_winit::winit::event_loop::EventLoop;
 
 use context::Context;
@@ -66,14 +64,14 @@ pub fn run<A: 'static + Application>(mut app: A, rt: Runtime) {
                         *control_flow = glutin::event_loop::ControlFlow::Exit;
                     }
                     WindowEvent::CursorMoved {
-                        device_id,
+                        device_id: _,
                         position,
                         ..
                     } => {
                         context.mouse.update_pos((position.x as i32, position.y as i32));
                     }
                     WindowEvent::MouseInput {
-                        device_id,
+                        device_id: _,
                         state,
                         button,
                         ..
@@ -107,7 +105,7 @@ pub fn run<A: 'static + Application>(mut app: A, rt: Runtime) {
                         }
                     }
                     WindowEvent::MouseWheel {
-                        device_id, delta, ..
+                        device_id: _, delta, ..
                     } => match delta {
                         MouseScrollDelta::LineDelta(y, x) => {
                             context.mouse.scroll((*x, *y));
@@ -115,9 +113,9 @@ pub fn run<A: 'static + Application>(mut app: A, rt: Runtime) {
                         _ => {}
                     },
                     WindowEvent::KeyboardInput {
-                        device_id,
+                        device_id: _,
                         input,
-                        is_synthetic,
+                        is_synthetic: _,
                         ..
                     } => match input {
                         KeyboardInput {
