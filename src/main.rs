@@ -1,6 +1,5 @@
 extern crate chrono;
 extern crate clipboard;
-extern crate inputbot;
 extern crate rfd;
 extern crate serde;
 

@@ -1,4 +1,4 @@
-use std::{ops::RangeInclusive, time::SystemTime};
+use std::{ops::RangeInclusive, time::SystemTime, fs::OpenOptions, io::Write};
 
 use async_trait::async_trait;
 use chrono::{DateTime, Local};
@@ -49,6 +49,10 @@ pub struct TF2BotKicker {
     regx_lobby: LogMatcher,
     regx_disconnect: LogMatcher,
 
+    export_steamid: Option<String>,
+    steamid: String,
+    export_regex: Option<String>,
+
     bot_checker: BotChecker,
 }
 
@@ -75,7 +79,7 @@ impl TF2BotKicker {
 
         // Create bot checker and load any bot detection rules saved
         let mut bot_checker = BotChecker::new();
-        for uuid_list in &settings.uuid_lists {
+        for uuid_list in &settings.steamid_lists {
             match bot_checker.add_steamid_list(uuid_list) {
                 Ok(_) => {}
                 Err(e) => message = format!("Error loading {}: {}", uuid_list, e),
@@ -105,6 +109,10 @@ impl TF2BotKicker {
             regx_lobby,
             regx_disconnect,
 
+            export_steamid: None,
+            steamid: String::new(),
+            export_regex: None,
+
             bot_checker,
         }
     }
@@ -116,7 +124,6 @@ impl TF2BotKicker {
                     return true;
                 }
                 Err(e) => {
-                    println!("Error with rcon: {:?}", &e);
                     self.rcon = Err(e);
                     return false;
                 }
@@ -128,7 +135,6 @@ impl TF2BotKicker {
                         return true;
                     }
                     Err(e) => {
-                        println!("Error with rcon: {:?}", &e);
                         self.rcon = Err(e);
                         return false;
                     }
@@ -147,7 +153,7 @@ impl TF2BotKicker {
             .rcon
             .as_mut()
             .unwrap()
-            .cmd("status; wait 200; echo \"refreshcomplete\"")
+            .cmd("status")
             .await;
         let lobby = self.rcon.as_mut().unwrap().cmd("tf_lobby_debug").await;
 
@@ -209,7 +215,8 @@ impl glium_app::Application for TF2BotKicker {
 
         // Refresh server
         if self.refresh_timer.update() {
-            self.refresh().await;
+            // self.refresh().await;
+            println!("Refresh disabled");
 
             let system_time = SystemTime::now();
             let datetime: DateTime<Local> = system_time.into();
@@ -238,6 +245,7 @@ impl glium_app::Application for TF2BotKicker {
 
                             match self.regx_status.r.captures(&line) {
                                 Some(c) => {
+                                    println!("{}", &line);
                                     (self.regx_status.f)(
                                         &mut self.server,
                                         &line,
@@ -360,7 +368,7 @@ impl glium_app::Application for TF2BotKicker {
                                             self.message = format!("{}", e);
                                         }
                                     }
-                                    self.settings.uuid_lists.push(dir);
+                                    self.settings.steamid_lists.push(dir);
                                     settings_changed = true;
                                 },
                                 None => {}
@@ -438,16 +446,31 @@ impl glium_app::Application for TF2BotKicker {
                     ui.label("");
                     ui.heading("Bot Detection Rules");
 
-                    ui.checkbox(&mut self.settings.record_steamids, &format!("Automatically append bot steamids to {}", DEFAULT_STEAMID_LIST));
+                    ui.checkbox(&mut self.settings.record_steamids, &format!("Automatically record bot SteamIDs"));
 
+                    ui.label("");
                     ui.collapsing("Regex Lists", |ui| {
                         let mut ind: Option<usize> = None;
                         for (i, l) in self.settings.regex_lists.iter().enumerate() {
-                            let lab = ui.selectable_label(false, l.split("/").last().unwrap());
-                            if lab.clicked() {
-                                ind = Some(i);
+
+                            let active = l.eq(&self.settings.regex_list);
+                            let mut text = RichText::new(l.split("/").last().unwrap());
+                            if active {
+                                text = text.color(Color32::LIGHT_GREEN);
                             }
-                            lab.on_hover_text("Click to remove");
+                            ui.collapsing(text, |ui| {
+                                if ui.button("Remove").clicked() {
+                                    ind = Some(i);
+                                }
+                                if !active {
+                                    let set = ui.button("Set Active");
+                                    let set = set.on_hover_text("Recorded Regexes will be added to this file");
+                                    if set.clicked() {
+                                        self.settings.regex_list = l.clone();
+                                        settings_changed = true;
+                                    }
+                                }
+                            });
                         }
                         match ind {
                             Some(i) => {
@@ -460,16 +483,30 @@ impl glium_app::Application for TF2BotKicker {
 
                     ui.collapsing("SteamID Lists", |ui| {
                         let mut ind: Option<usize> = None;
-                        for (i, l) in self.settings.uuid_lists.iter().enumerate() {
-                            let lab = ui.selectable_label(false, l.split("/").last().unwrap());
-                            if lab.clicked() {
-                                ind = Some(i);
+                        for (i, l) in self.settings.steamid_lists.iter().enumerate() {
+
+                            let active = l.eq(&self.settings.steamid_list);
+                            let mut text = RichText::new(l.split("/").last().unwrap());
+                            if active {
+                                text = text.color(Color32::LIGHT_GREEN);
                             }
-                            lab.on_hover_text("Click to remove");
+                            ui.collapsing(text, |ui| {
+                                if ui.button("Remove").clicked() {
+                                    ind = Some(i);
+                                }
+                                if !active {
+                                    let set = ui.button("Set Active");
+                                    let set = set.on_hover_text("Recorded SteamIDs will be added to this file");
+                                    if set.clicked() {
+                                        self.settings.steamid_list = l.clone();
+                                        settings_changed = true;
+                                    }
+                                }
+                            });
                         }
                         match ind {
                             Some(i) => {
-                                self.settings.uuid_lists.remove(i);
+                                self.settings.steamid_lists.remove(i);
                                 settings_changed = true;
                             },
                             None => {}
@@ -568,13 +605,13 @@ impl glium_app::Application for TF2BotKicker {
                                         for (_, p) in &mut self.server.players {
 
                                             if p.team == Team::Invaders {
-                                                render_player(&mut cols[0], &self.settings, &mut self.bot_checker, &mut self.message, p, width);
+                                                render_player(&mut cols[0], &self.settings, &mut self.message, p, width, &mut self.export_steamid, &mut self.export_regex, &mut self.steamid);
                                             }
-
+        
                                             if p.team == Team::Defenders {
-                                                render_player(&mut cols[1], &self.settings, &mut self.bot_checker, &mut self.message, p, width);
+                                                render_player(&mut cols[1], &self.settings, &mut self.message, p, width, &mut self.export_steamid, &mut self.export_regex, &mut self.steamid);
                                             }
-
+        
                                         }
 
                                     });
@@ -616,6 +653,73 @@ impl glium_app::Application for TF2BotKicker {
                         }
                     }
                 }
+
+
+                match &mut self.export_steamid {
+                    Some(text) => {
+                        let mut open = true;
+                        let mut exported = false;
+                        egui::Window::new("Export SteamID")
+                        .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                        .open(&mut open)
+                        .collapsible(false)
+                        .show(ctx, |ui| {
+                            ui.vertical_centered(|ui| {
+                                ui.text_edit_singleline(text);
+                                if ui.button("Confirm").clicked() {
+                                    append_line(&text, &self.settings.steamid_list);
+                                    self.bot_checker.append_steamid(&self.steamid);
+                                    self.message = format!("Saved \"{}\" to {}", &text, &self.settings.steamid_list);
+                                    exported = true;
+                                }
+                            });
+                        });
+                        if !open || exported {
+                            self.export_steamid = None;
+                        }
+                    },
+                    None => {}
+                }
+
+                match &mut self.export_regex {
+                    Some(text) => {
+                        let mut open = true;
+                        let mut exported = false;
+                        egui::Window::new("Export Name/Regex")
+                        .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                        .open(&mut open)
+                        .collapsible(false)
+                        .show(ctx, |ui| {
+                            ui.vertical_centered(|ui| {
+                                ui.text_edit_singleline(text);
+                                if ui.button("Confirm").clicked() {
+
+                                    let reg = Regex::new(&text);
+                                    match reg {
+                                        Ok(reg) => {
+                                            append_line(&text, &self.settings.regex_list);
+                                            self.bot_checker.append_regex(reg);
+                                            self.message = format!("Saved \"{}\" to {}", &text, &self.settings.regex_list);
+                                            exported = true;
+                                        },
+                                        Err(e) => {
+                                            self.message = format!("Invalid Regex: {}", e);
+                                        }
+                                    }
+                                }
+                            });
+                        });
+                        if !open || exported {
+                            self.export_regex = None;
+                        }
+                    },
+                    None => {}
+                }
+                
+
+
+
+
             });
 
             // Export settings if they've changed
@@ -637,6 +741,7 @@ impl glium_app::Application for TF2BotKicker {
     }
 
     fn close(&mut self) {}
+
 }
 
 // Make a selectable label which copies it's text to the clipboard on click
@@ -670,8 +775,35 @@ fn format_time(time: u32) -> String {
 
 const TRUNC_LEN: usize = 20;
 
+
+/// Truncates a &str
+fn truncate(s: &str, max_chars: usize) -> &str {
+    match s.char_indices().nth(max_chars) {
+        None => s,
+        Some((idx, _)) => &s[..idx],
+    }
+}
+
+pub fn append_line(data: &str, target: &str) {
+    // Add suspected bot steamid and name to file
+    let mut file = OpenOptions::new()
+        .write(true)
+        .append(true)
+        .create(true)
+        .open(target)
+        .expect(&format!(
+            "Failed to Open or Write to {}",
+            target
+        ));
+
+    if let Err(_) = write!(file, "\n{}", data) {
+        eprintln!("Failed to Open or Write to {}", target);
+    }
+}
+
 // Ui for a player
-fn render_player(ui: &mut Ui, set: &Settings, bc: &mut BotChecker, mes: &mut String, p: &mut Player, width: f32) {
+fn render_player(ui: &mut Ui, set: &Settings, mes: &mut String, p: &mut Player, width: f32, export_steamid: &mut Option<String>, export_regex: &mut Option<String>, steamid: &mut String) {
+
     ui.horizontal(|ui| {
         ui.set_width(width);
 
@@ -685,16 +817,11 @@ fn render_player(ui: &mut Ui, set: &Settings, bc: &mut BotChecker, mes: &mut Str
         }
 
         ui.collapsing(text, |ui| {
-            let prefix = match p.bot {
-                true => "NOT ",
-                false => "",
-            };
+
+            let prefix = match p.bot {true => "NOT ", false => ""};
             let mut text = RichText::new(&format!("Mark as {}Bot", prefix));
-            if !p.bot {
-                text = text.color(Color32::LIGHT_RED);
-            } else {
-                text = text.color(Color32::LIGHT_GREEN);
-            }
+            if !p.bot {text = text.color(Color32::LIGHT_RED);}
+            else {text = text.color(Color32::LIGHT_GREEN);}
 
             if ui.selectable_label(false, text).clicked() {
                 p.bot = !p.bot;
@@ -702,50 +829,33 @@ fn render_player(ui: &mut Ui, set: &Settings, bc: &mut BotChecker, mes: &mut Str
 
             ui.horizontal(|ui| {
                 if ui.selectable_label(false, "Copy Name").clicked() {
-                    let ctx: Result<ClipboardContext, Box<dyn std::error::Error>> =
-                        ClipboardProvider::new();
+                    let ctx: Result<ClipboardContext, Box<dyn std::error::Error>> = ClipboardProvider::new();
                     ctx.unwrap().set_contents(p.name.clone()).unwrap();
                     mes.clear();
                     mes.push_str(&format!("Copied \"{}\"", p.name));
                 }
                 if ui.selectable_label(false, "Copy SteamID").clicked() {
-                    let ctx: Result<ClipboardContext, Box<dyn std::error::Error>> =
-                        ClipboardProvider::new();
+                    let ctx: Result<ClipboardContext, Box<dyn std::error::Error>> = ClipboardProvider::new();
                     ctx.unwrap().set_contents(p.steamid.clone()).unwrap();
                     mes.clear();
-                    mes.push_str(&format!("Copied \"{}\"", p.steamid));
+                    mes.push_str(&format!("Copied \"{}\"", p.steamid)); 
                 }
             });
 
             if p.bot {
                 ui.horizontal(|ui| {
-                    let lab = ui.selectable_label(
-                        false,
-                        RichText::new("Save SteamID").color(Color32::LIGHT_RED),
-                    );
+                    let lab = ui.selectable_label(false, RichText::new("Save SteamID").color(Color32::LIGHT_RED));
                     if lab.clicked() {
-                        p.export_steamid();
-                        bc.bots_uuid.push(p.steamid.clone());
-                        *mes = format!("Saved {}'s SteamID to {}", &p.name, DEFAULT_STEAMID_LIST);
+                        *export_steamid = Some(p.get_export_steamid());
+                        *steamid = p.steamid.clone();
                     }
-                    lab.on_hover_text(
-                        RichText::new("This player will always be recognized as a bot")
-                            .color(Color32::RED),
-                    );
-
-                    let lab = ui.selectable_label(
-                        false,
-                        RichText::new("Save Name").color(Color32::LIGHT_RED),
-                    );
+                    lab.on_hover_text(RichText::new("This player will always be recognized as a bot").color(Color32::RED));
+    
+                    let lab = ui.selectable_label(false, RichText::new("Save Name").color(Color32::LIGHT_RED));
                     if lab.clicked() {
-                        p.export_regex();
-                        bc.bots_regx.push(Regex::new(&p.get_regex()).unwrap());
-                        *mes = format!("Saved {}'s Name to {}", &p.name, DEFAULT_REGEX_LIST);
+                        *export_regex = Some(p.get_export_regex());
                     }
-                    lab.on_hover_text(
-                        RichText::new("Players with this name will always be recognized as a bot")
-                            .color(Color32::RED),
-                    );
+                    lab.on_hover_text(RichText::new("Players with this name will always be recognized as a bot").color(Color32::RED));
                 });
             }
         });
@@ -764,13 +874,6 @@ fn render_player(ui: &mut Ui, set: &Settings, bc: &mut BotChecker, mes: &mut Str
                 }
             });
         });
-    });
-}
 
-/// Truncates a &str
-fn truncate(s: &str, max_chars: usize) -> &str {
-    match s.char_indices().nth(max_chars) {
-        None => s,
-        Some((idx, _)) => &s[..idx],
-    }
+    });
 }

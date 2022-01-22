@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-pub const DEFAULT_REGEX_LIST: &str = "regx.txt";
-pub const DEFAULT_STEAMID_LIST: &str = "steamids.txt";
+pub const DEFAULT_REGEX_LIST: &str = "cfg/regx.txt";
+pub const DEFAULT_STEAMID_LIST: &str = "cfg/steamids.txt";
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Settings {
@@ -18,8 +18,10 @@ pub struct Settings {
     pub tf2_directory: String,
 
     pub record_steamids: bool,
+    pub steamid_list: String,
+    pub regex_list: String,
 
-    pub uuid_lists: Vec<String>,
+    pub steamid_lists: Vec<String>,
     pub regex_lists: Vec<String>,
 }
 
@@ -31,7 +33,7 @@ impl Settings {
             chat_reminders: false,
             kick: true,
 
-            refresh_period: 5.0,
+            refresh_period: 10.0,
             kick_period: 10.0,
             alert_period: 20.0,
 
@@ -39,9 +41,11 @@ impl Settings {
             tf2_directory: String::new(),
 
             record_steamids: true,
+            steamid_list: String::from(DEFAULT_STEAMID_LIST),
+            regex_list: String::from(DEFAULT_REGEX_LIST),
 
-            uuid_lists: vec![format!("cfg/{}", DEFAULT_STEAMID_LIST)],
-            regex_lists: vec![format!("cfg/{}", DEFAULT_REGEX_LIST)],
+            steamid_lists: vec![DEFAULT_STEAMID_LIST.to_string()],
+            regex_lists: vec![DEFAULT_REGEX_LIST.to_string()],
         }
     }
 

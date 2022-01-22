@@ -21,8 +21,24 @@ pub struct Server {
 
 impl Server {
     pub fn new() -> Server {
+
+        let mut players = HashMap::with_capacity(24);
+        players.insert(String::from("U:1:1234567"), Player {
+            userid: String::from("0"),
+            name: String::from("Debug User"),
+            steamid: String::from("U:1:1234567"),
+            known_steamid: true,
+            time: 0,
+            team: Team::Invaders,
+            state: State::Active,
+            bot: false,
+            accounted: true,
+            new_connection: false,
+        }); 
+
         Server {
-            players: HashMap::with_capacity(24),
+            players,
+            // players: HashMap::with_capacity(24),
             new_bots: Vec::new(),
         }
     }
@@ -182,20 +198,20 @@ impl Server {
         } else {
             // Set which team they're on
             if invaders && defenders {
-                alert.push_str("BOT Alert: Both teams have BOTS: ");
+                alert.push_str("Both teams have BOTS: ");
             } else {
                 match self.players.get(&set.user) {
                     Some(p) => {
                         if (p.team == Team::Invaders && invaders)
                             || (p.team == Team::Defenders && defenders)
                         {
-                            alert.push_str("BOT Alert: Our team has BOTS: ");
+                            alert.push_str("Our team has BOTS: ");
                         } else {
-                            alert.push_str("BOT Alert: Enemy team has BOTS: ");
+                            alert.push_str("Enemy team has BOTS: ");
                         }
                     }
                     None => {
-                        alert.push_str("BOT Alert: The server has BOTS: ");
+                        alert.push_str("The server has BOTS: ");
                     }
                 }
             }
@@ -226,6 +242,10 @@ impl Server {
             if !v.accounted && v.bot {
                 println!("Bot disconnected: {}", v.name);
             }
+            if !v.accounted {
+                println!("Player Pruned: {}", v.name);
+            }
+
             v.accounted
         });
     }

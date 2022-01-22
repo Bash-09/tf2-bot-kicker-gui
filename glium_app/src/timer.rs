@@ -1,4 +1,4 @@
-use std::{ops::Add, time::Instant};
+use std::time::Instant;
 
 pub struct Timer {
     last: Instant,

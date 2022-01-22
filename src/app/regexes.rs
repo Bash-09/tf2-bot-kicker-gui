@@ -1,7 +1,7 @@
 #![allow(non_upper_case_globals)]
 #![allow(unused_variables)]
 
-use crate::server::*;
+use crate::{server::*, app::append_line};
 
 use regex::{Captures, Regex};
 
@@ -77,6 +77,7 @@ pub fn f_status(
     // Create a new player entry
     } else {
         let name = caps[2].to_string();
+        println!("New player: {}", name);
         let mut known_steamid: bool = false;
 
         // Check if they are a bot according to the lists
@@ -95,11 +96,11 @@ pub fn f_status(
                 println!("Unknown bot joining: {} - [{}]", name, steamid);
             }
 
-            bot_checker.append_uuid(steamid.clone());
+            bot_checker.append_steamid(&steamid);
         }
 
         let mut new_connection: bool = false;
-        if time < 20 {
+        if (time as f32) < set.alert_period {
             new_connection = true;
         }
 
@@ -118,7 +119,7 @@ pub fn f_status(
         };
 
         if set.record_steamids && p.bot && !p.known_steamid {
-            p.export_steamid();
+            append_line(&p.get_export_steamid(), &set.steamid_list);
         }
 
         serv.players.insert(p.steamid.clone(), p);

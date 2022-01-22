@@ -284,3 +284,8 @@
 [U:1:1197702352] - irc.myg0t.gg:6667#myg0t
 [U:1:1128604508] - irc.myg0t.gg:6667#myg0t
 
+
+[U:1:891882693] - (1)DoesHotter
+[U:1:123946667] - DoesHotter
+[U:1:1184112717] - irc.myg0t.gg:6667#myg0t
+[U:1:1242294083] - (1)DoesHotter

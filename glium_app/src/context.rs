@@ -1,9 +1,7 @@
 use egui_glium::EguiGlium;
 use glium::Display;
 
-use crate::{timer::Timer, io::{keyboard::Keyboard, mouse::Mouse}};
-
-
+use crate::{io::{keyboard::Keyboard, mouse::Mouse}};
 
 pub struct Context {
     pub dis: Display,
@@ -13,7 +11,6 @@ pub struct Context {
     pub keyboard: Keyboard,
 
 }
-
 
 impl Context {
     pub fn new(dis: Display, gui: EguiGlium) -> Context {

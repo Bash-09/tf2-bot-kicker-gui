@@ -1,7 +1,4 @@
 use core::fmt;
-use std::{fs::OpenOptions, io::Write};
-
-use crate::app::settings::{DEFAULT_REGEX_LIST, DEFAULT_STEAMID_LIST};
 
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum Team {
@@ -67,47 +64,13 @@ impl std::fmt::Display for Player {
 }
 
 impl Player {
-    pub fn export_steamid(&self) {
-        // Add suspected bot steamid and name to file
-        let mut file = OpenOptions::new()
-            .write(true)
-            .append(true)
-            .create(true)
-            .open(format!("cfg/{}", DEFAULT_STEAMID_LIST))
-            .expect(&format!(
-                "Failed to Open or Write to cfg/{}",
-                DEFAULT_STEAMID_LIST
-            ));
 
-        if let Err(_) = write!(file, "\n[{}] - {}", &self.steamid, &self.name) {
-            eprintln!("Failed to Open or Write to cfg/{}", DEFAULT_STEAMID_LIST);
-        }
-
-        println!("Exported \"[{}] - {}\"", &self.steamid, &self.name);
+    pub fn get_export_steamid(&self) -> String {
+        format!("[{}] - {}", &self.steamid, &self.name)
     }
 
-    pub fn export_regex(&self) {
-        // Add suspected bot steamid and name to file
-        let mut file = OpenOptions::new()
-            .write(true)
-            .append(true)
-            .create(true)
-            .open(format!("cfg/{}", DEFAULT_REGEX_LIST))
-            .expect(&format!(
-                "Failed to Open or Write to cfg/{}",
-                DEFAULT_REGEX_LIST
-            ));
-
-        let regx = self.get_regex();
-
-        if let Err(_) = write!(file, "\n{}", regx) {
-            eprintln!("Failed to Open or Write to cfg/{}", DEFAULT_REGEX_LIST);
-        }
-
-        println!("Exported \"{}\"", regx);
-    }
-
-    pub fn get_regex(&self) -> String {
+    pub fn get_export_regex(&self) -> String {
         regex::escape(&self.name)
     }
+
 }

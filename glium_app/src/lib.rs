@@ -39,7 +39,7 @@ pub fn run<A: 'static + Application>(mut app: A, rt: Runtime) {
     let cb = ContextBuilder::new().with_vsync(false);
     let display = Display::new(wb, cb, &event_loop).expect("Failed to open Display!");
 
-    let mut egui_glium = egui_glium::EguiGlium::new(&display);
+    let egui_glium = egui_glium::EguiGlium::new(&display);
 
     let mut context: Context = Context::new(display, egui_glium);
     let mut t = Timer::new();
@@ -56,7 +56,7 @@ pub fn run<A: 'static + Application>(mut app: A, rt: Runtime) {
         match &ev {
             glutin::event::Event::WindowEvent { event, .. } => 
             {
-                let consume = context.gui.on_event(&event);
+                let _consume = context.gui.on_event(&event);
 
                 match event {
                     WindowEvent::CloseRequested => {
@@ -76,22 +76,22 @@ pub fn run<A: 'static + Application>(mut app: A, rt: Runtime) {
                         button,
                         ..
                     } => {
-                        let mut mbutton: u16 = 0;
+                        let mut _mbutton: u16 = 0;
                         match button {
                             MouseButton::Left => {
-                                mbutton = 0;
+                                _mbutton = 0;
                             }
                             MouseButton::Middle => {
-                                mbutton = 1;
+                                _mbutton = 1;
                             }
                             MouseButton::Right => {
-                                mbutton = 2;
+                                _mbutton = 2;
                             }
                             MouseButton::Other(bnum) => {
                                 if bnum > &(9 as u16) {
                                     return;
                                 }
-                                mbutton = *bnum;
+                                _mbutton = *bnum;
                             }
                         }
                         let mut pressed = false;
@@ -99,9 +99,9 @@ pub fn run<A: 'static + Application>(mut app: A, rt: Runtime) {
                             pressed = true;
                         }
                         if pressed {
-                            context.mouse.press_button(mbutton as usize);
+                            context.mouse.press_button(_mbutton as usize);
                         } else {
-                            context.mouse.release_button(mbutton as usize);
+                            context.mouse.release_button(_mbutton as usize);
                         }
                     }
                     WindowEvent::MouseWheel {
