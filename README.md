@@ -8,13 +8,14 @@ A (somewhat) cross-platform bot identifier/kicker written in Rust.
 
 Download the program from [here.](https://github.com/Googe14/tf2-bot-kicker-gui/releases)
 
-1. Add 
+
 ```
 ip 0.0.0.0
 rcon_password tf2bk
 net_start
 ```
-to your TF2 autoexec.cfg (You can choose anything for the rcon_password, you will just have to set it when you start the program)
+
+1. Add the above 3 lines to your TF2 autoexec.cfg (You can choose anything for the rcon_password, you will just have to set it when you start the program)
 2. Add `-condebug -conclearlog -usercon` to your Steam TF2 launch options. (Right click Team Fortress 2 in your Steam library, select Properties, and paste into the Launch Options section)
 3. Launch TF2.
 4. Run the program and set your TF2 directory.

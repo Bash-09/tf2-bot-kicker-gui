@@ -162,7 +162,6 @@ impl TF2BotKicker {
         }
 
         let lobby = lobby.unwrap();
-        println!("Lobby:\n {}", lobby);
 
         if lobby.contains("Failed to find lobby shared object") {
             self.server.clear();
@@ -244,7 +243,6 @@ impl glium_app::Application for TF2BotKicker {
 
                             match self.regx_status.r.captures(&line) {
                                 Some(c) => {
-                                    println!("{}", &line);
                                     (self.regx_status.f)(
                                         &mut self.server,
                                         &line,
