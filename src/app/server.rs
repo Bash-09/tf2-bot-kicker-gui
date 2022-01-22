@@ -22,23 +22,23 @@ pub struct Server {
 impl Server {
     pub fn new() -> Server {
 
-        let mut players = HashMap::with_capacity(24);
-        players.insert(String::from("U:1:1234567"), Player {
-            userid: String::from("0"),
-            name: String::from("Debug User"),
-            steamid: String::from("U:1:1234567"),
-            known_steamid: true,
-            time: 0,
-            team: Team::Invaders,
-            state: State::Active,
-            bot: false,
-            accounted: true,
-            new_connection: false,
-        }); 
+        // let mut players = HashMap::with_capacity(24);
+        // players.insert(String::from("U:1:1234567"), Player {
+        //     userid: String::from("0"),
+        //     name: String::from("Debug User"),
+        //     steamid: String::from("U:1:1234567"),
+        //     known_steamid: true,
+        //     time: 0,
+        //     team: Team::Invaders,
+        //     state: State::Active,
+        //     bot: false,
+        //     accounted: true,
+        //     new_connection: false,
+        // }); 
 
         Server {
-            players,
-            // players: HashMap::with_capacity(24),
+            // players,
+            players: HashMap::with_capacity(24),
             new_bots: Vec::new(),
         }
     }

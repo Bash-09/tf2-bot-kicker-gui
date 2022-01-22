@@ -215,8 +215,7 @@ impl glium_app::Application for TF2BotKicker {
 
         // Refresh server
         if self.refresh_timer.update() {
-            // self.refresh().await;
-            println!("Refresh disabled");
+            self.refresh().await;
 
             let system_time = SystemTime::now();
             let datetime: DateTime<Local> = system_time.into();
