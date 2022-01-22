@@ -75,6 +75,7 @@ impl TF2BotKicker {
         let regx_disconnect =
             LogMatcher::new(Regex::new(r_user_disconnect).unwrap(), f_user_disconnect);
 
+
         let mut message = String::from("Loaded");
 
         // Create bot checker and load any bot detection rules saved

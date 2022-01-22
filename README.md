@@ -8,7 +8,6 @@ A (somewhat) cross-platform bot identifier/kicker written in Rust.
 
 Download the program from [here.](https://github.com/Googe14/tf2-bot-kicker-gui/releases)
 
-
 ```
 ip 0.0.0.0
 rcon_password tf2bk
@@ -36,6 +35,7 @@ To reset your settings, delete the `settings.json` file in the `cfg` folder.
 
 Note: I encourage you to not leave Chat Reminders on if the period is reasonably low (maybe 30 seconds?) as that may be annoying for the other players, find a balance or turn reminders off. I personally play with no Chat Reminders or Join Alerts at a period of 10 seconds.
 
+
 ## Bot identification
 
 Bots are identified either by their name or steamid according to lists that you can add and remove from the program in the settings panel and File menu.
@@ -49,7 +49,6 @@ On Linux some libraries may need to be installed. (As listed in the Ubuntu repos
 
 `librust-gdk-dev`\
 `libudev-dev`\
-`libinput-dev`\
 `libxcb-render0-dev`\
 `libxcb-shape0-dev`\
 `libxcb-xfixes0-dev`
