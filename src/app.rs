@@ -527,7 +527,7 @@ impl glium_app::Application for TF2BotKicker {
 
                     ui.horizontal(|ui| {
                         ui.label("1. Add");
-                        copy_label(&mut self.message, "-condebug -conclearlog", ui);
+                        copy_label(&mut self.message, "-condebug -conclearlog -usercon", ui);
                         ui.label("to your TF2 launch options and start the game.");
                     });
 
