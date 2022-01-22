@@ -193,7 +193,7 @@ impl glium_app::Application for TF2BotKicker {
         glium_app::WindowBuilder::new()
             .with_title("TF2 Bot Kicker by Bash09/Googe14")
             .with_resizable(true)
-            .with_inner_size(glium_app::PhysicalSize::new(800, 350))
+            .with_inner_size(glium_app::PhysicalSize::new(800, 400))
     }
 
     fn init(&mut self, _ctx: &mut glium_app::context::Context) {

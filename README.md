@@ -2,7 +2,7 @@
 
 A (somewhat) cross-platform bot identifier/kicker written in Rust.
 
-![Demonstration Image](images/Demonstration.png)
+![Demonstration Image](images/Demo.png)
 
 # Usage
 
