@@ -1,4 +1,4 @@
-# tf2-bot-kicker-gui
+# tf2-bot-kicker-gui - Pending new release as soon as I get around to it. (Probably in 1 or 2 days)
 
 A (somewhat) cross-platform bot identifier/kicker written in Rust.
 
