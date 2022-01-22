@@ -6,7 +6,16 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-eframe = "0.16.0" # Gives us egui, epi and web+native backends
+rcon = { version = "0.6.0", features = ["rt-tokio"] }
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1.52"
+
+
+glium_app = { path = "./glium_app" }
+egui = "0.16.0"
+egui-winit = { version = "0.16.0", default-features = false }
+egui_glium = { version = "0.16.0", default-features = false, features = ["clipboard", "epi", "links"]}
+
 
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.73"
@@ -14,5 +23,4 @@ serde_json = "1.0.73"
 chrono = "0.4.19"
 rfd = "0.6.3"
 clipboard = "0.5.0"
-inputbot = { git = "https://github.com/Googe14/InputBot" }
 regex = "1.5.4"

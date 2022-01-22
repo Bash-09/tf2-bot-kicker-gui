@@ -285,6 +285,11 @@
 [U:1:1128604508] - irc.myg0t.gg:6667#myg0t
 
 
+[U:1:891882693] - (1)DoesHotter
+[U:1:123946667] - DoesHotter
+[U:1:1184112717] - irc.myg0t.gg:6667#myg0t
+[U:1:1242294083] - (1)DoesHotter
+[U:1:100723100] - DoesHotter
 [U:1:1220698471] - dsc.gg/Valve
 [U:1:127672124] - DoesHotter
 [U:1:1243149474] - (1)dsc.gg/Valve

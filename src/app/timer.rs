@@ -2,21 +2,16 @@
 
 use std::time::Instant;
 
-
-
 pub struct Timer {
-    
     last: Instant,
 
     duration: f32,
     update: bool,
 
     last_delta: f32,
-
 }
 
 impl Timer {
-
     pub fn new() -> Timer {
         Timer {
             last: Instant::now(),
@@ -32,7 +27,6 @@ impl Timer {
         self.last = Instant::now();
         self.duration = 0.0;
     }
-
 
     pub fn go(&mut self, duration: f32) -> Option<f32> {
         let now = self.last.elapsed();
@@ -54,6 +48,7 @@ impl Timer {
         Some(delta)
     }
 
+    #[allow(dead_code)]
     pub fn delta(&self) -> f32 {
         self.last_delta
     }
@@ -61,7 +56,4 @@ impl Timer {
     pub fn update(&self) -> bool {
         self.update
     }
-
-
-
 }

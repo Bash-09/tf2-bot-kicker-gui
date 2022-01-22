@@ -1,18 +1,22 @@
-extern crate serde;
 extern crate chrono;
-extern crate rfd;
 extern crate clipboard;
-extern crate inputbot;
-
+extern crate rfd;
+extern crate serde;
 
 mod app;
 use app::*;
+use tokio::runtime::Runtime;
 
+// #[tokio::main]
 fn main() {
-    use eframe::egui::Vec2;
+    let rt = Runtime::new().unwrap();
+    // let app = Box::new(TF2BotKicker::new().await);
 
-    let app = TF2BotKicker::default();
-    let mut native_options = eframe::NativeOptions::default();
-    native_options.initial_window_size = Some(Vec2::new(800.0, 350.0));
-    eframe::run_native(Box::new(app), native_options);
+    let mut app = None;
+
+    rt.block_on(async {
+        app = Some(TF2BotKicker::new().await);
+    });
+
+    glium_app::run(app.unwrap(), rt);
 }

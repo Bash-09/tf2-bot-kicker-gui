@@ -2,48 +2,39 @@
 
 A (somewhat) cross-platform bot identifier/kicker written in Rust.
 
-![Demonstration Image](images/Demonstration.png)
+![Demonstration Image](images/Demo.png)
 
 # Usage
 
 Download the program from [here.](https://github.com/Googe14/tf2-bot-kicker-gui/releases)
 
-1. Add `bind F8 "exec command"` to your TF2 autoexec.cfg (or whichever key you set)
-2. Add `-condebug -conclearlog` to your Steam TF2 launch options. (Right click Team Fortress 2 in your Steam library, select Properties, and paste into the Launch Options section)
+```
+ip 0.0.0.0
+rcon_password tf2bk
+net_start
+```
+
+1. Add the above 3 lines to your TF2 autoexec.cfg (You can choose anything for the rcon_password, you will just have to set it when you start the program)
+2. Add `-condebug -conclearlog -usercon` to your Steam TF2 launch options. (Right click Team Fortress 2 in your Steam library, select Properties, and paste into the Launch Options section)
 3. Launch TF2.
 4. Run the program and set your TF2 directory.
-
-## Windows
-
-Should work without issue.
-
-## Linux
-
-Linux users may have to install some of the following packages. (As listed in the Ubuntu repository)
-
-`libinput-bin`
-
-### Wayland
-
-Some Wayland environments will not allow `libinput` access to `/dev/uinput` without root.
-
-To fix this you can either run the program as root with sudo, or grant access to `/dev/uinput` with `chmod +0666 /dev/uinput` before running the program (This command will not persist after restart and will need to be run each time before using this program, for a more permanent solution you can follow the instructions under "Without X11" at https://crates.io/crates/tfc).
-
 
 # Settings and Configuration
 
 To reset your settings, delete the `settings.json` file in the `cfg` folder.
 
 `User` - Your SteamID3 (like from when you use the status command in-game) to indentify if bots are on the friendly or enemy team. (will stop attempting to kick enemy bots if set)\
-`Kick Bots` - if you want to automatically call votekicks on bots.\
-`Join Alerts` - if you want to send chat messages that say when a bot is joining the server.\
-`Chat Reminders` - if you want regular messages in chat to alert other players of current connected bots.\
-`Period` - Time in seconds between actions (each alert/kick attempt)\
-`Command Key` - Which key the program will use to run commands. If you change this, be sure to update the key bind in your `autoexec.cfg` file
+`RCon Password` - Make sure this is the same as is set by rcon_password in your autoexec.cfg file.\
+`Kick Bots` - Automatically call votekicks on identified bots.\
+`Join Alerts` - Send chat messages that say when a bot is joining the server.\
+`Chat Reminders` - Send regular messages in chat to alert other players of current connected bots.\
+`Period` - Time in seconds between actions (each alert/chat reminder message, kick attempt and server refresh)\
+`Automatically record bot SteamIDs` - Record the SteamID of bots identified by name to a list.
 
-Notes:
-1. I encourage you to not leave Chat Reminders on if the period is reasonably low (maybe 30 seconds?) as that may be annoying for the other players, find a balance or turn reminders off. I personally play with no Chat Reminders or Join Alerts at a period of 10 seconds.
-2. It is recommended to use a key that isn't used much by other programs such as F8, as to avoid it potentially being pressed when you have the game tabbed-out or similar. Although the program will automatically pause and start when you connect/disconnect from a server so this only applies if you are tabbed-out during a game (or switching server).
+`Active SteamID/Regex list` - Setting a SteamID or Regex list as active will cause automatically or manually recorded SteamIDs or Regexes to be appended to that list. You can see the active list by it's green name.
+
+Note: I encourage you to not leave Chat Reminders on if the period is reasonably low (maybe 30 seconds?) as that may be annoying for the other players, find a balance or turn reminders off. I personally play with no Chat Reminders or Join Alerts at a period of 10 seconds.
+
 
 ## Bot identification
 
@@ -64,4 +55,6 @@ On Linux some libraries may need to be installed. (As listed in the Ubuntu repos
 
 # How it works
  
-By adding `-condebug -conclearlog` to your TF2 launch options, the game outputs the contents of the in-game console to a log file in real-time. By running certain commands, this log file can reveal players and their SteamIDs on casual servers, this program writes these commands to a cfg file in the TF2 directory and simulates a keypress to run those commands via the keybind. Players names and steamids are then checked against certain rules and if they are determined to be a bot, action can be taken. No hacks required!
+By adding `-usercon` to your TF2 launch options and the settings in your `autoexec.cfg` file, programs are able to initiate a Remote CONsole with the game over a TCP connection. From this RCON connection, this program can execute commands and read the response while you are busy playing TF2. Using commands like `status` and `tf_lobby_debug`, the program is able to see the names and SteamIDs of players in your Casual server, which it uses to identify bots according to the SteamIDs or names saved in any files you have set in the program. If any players are identified as a bot by their SteamID or name, this program will take appropriate action.
+
+Unfortunately the `status` command runs but does not respond over rcon, instead outputting into the local game console. To overcome this, `-condebug -conclearlog` is added the the TF2 launch options to output the contents of the in-game console to a log file, which this program reads from to get the output of the status command.

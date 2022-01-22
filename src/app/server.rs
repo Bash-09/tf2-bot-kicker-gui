@@ -4,10 +4,11 @@ use std::collections::HashMap;
 
 pub mod player;
 use player::Player;
-use player::Team;
 use player::State;
+use player::Team;
+use rcon::Connection;
+use tokio::net::TcpStream;
 
-use super::commander::Commander;
 use super::settings::Settings;
 
 pub const COM_STATUS: &str = "status";
@@ -15,16 +16,29 @@ pub const COM_LOBBY: &str = "tf_lobby_debug";
 
 pub struct Server {
     pub players: HashMap<String, Player>,
-    // pub com: Commander,
-    // pub bot_checker: BotChecker,
     pub new_bots: Vec<(String, Team)>,
 }
 
 impl Server {
     pub fn new() -> Server {
+
+        // let mut players = HashMap::with_capacity(24);
+        // players.insert(String::from("U:1:1234567"), Player {
+        //     userid: String::from("0"),
+        //     name: String::from("Debug User"),
+        //     steamid: String::from("U:1:1234567"),
+        //     known_steamid: true,
+        //     time: 0,
+        //     team: Team::Invaders,
+        //     state: State::Active,
+        //     bot: false,
+        //     accounted: true,
+        //     new_connection: false,
+        // }); 
+
         Server {
+            // players,
             players: HashMap::with_capacity(24),
-            // bot_checker: BotChecker::new(),
             new_bots: Vec::new(),
         }
     }
@@ -32,6 +46,13 @@ impl Server {
     pub fn clear(&mut self) {
         self.players.clear();
         self.new_bots.clear();
+    }
+
+    pub fn list_players(&self) {
+        println!("Listing players:");
+        for p in self.players.values() {
+            println!("Player: {}", p);
+        }
     }
 
     pub fn get_bots(&self) -> Vec<&Player> {
@@ -49,8 +70,7 @@ impl Server {
     /// Call a votekick on any players detected as bots.
     /// If userid is set in cfg/settings.cfg then it will only attempt to call vote on bots in the same team
     /// There is no way of knowing if a vote is in progress or the user is on cooldown so votes will still be attempted
-    pub fn kick_bots(&mut self, set: &Settings, com: &mut Commander) {
-
+    pub async fn kick_bots(&mut self, set: &Settings, rcon: &mut Connection<TcpStream>) {
         if !set.kick {
             return;
         }
@@ -71,18 +91,18 @@ impl Server {
             match self.players.get(&set.user) {
                 Some(user) => {
                     if user.team == p.team {
-                        com.kick(p, set);
+                        let _cmd = rcon.cmd(&format!("callvote kick {}", p.userid)).await;
                     }
-                },
+                }
                 None => {
-                    com.kick(p, set);
+                    let _cmd = rcon.cmd(&format!("callvote kick {}", p.userid)).await;
                 }
             }
         }
     }
 
     /// Print bots to console and send chat message in-game if necessary of current bots
-    pub fn announce_bots(&mut self, set: &Settings, com: &mut Commander) {
+    pub async fn announce_bots(&mut self, set: &Settings, rcon: &mut Connection<TcpStream>) {
         let mut bots: Vec<String> = Vec::new();
         let mut new: bool = false;
 
@@ -169,7 +189,7 @@ impl Server {
                         } else {
                             alert.push_str("BOTS joining enemy team: ");
                         }
-                    },
+                    }
                     None => {
                         alert.push_str("BOTS joining: ");
                     }
@@ -178,20 +198,20 @@ impl Server {
         } else {
             // Set which team they're on
             if invaders && defenders {
-                alert.push_str("BOT Alert: Both teams have BOTS: ");
+                alert.push_str("Both teams have BOTS: ");
             } else {
                 match self.players.get(&set.user) {
                     Some(p) => {
                         if (p.team == Team::Invaders && invaders)
                             || (p.team == Team::Defenders && defenders)
                         {
-                            alert.push_str("BOT Alert: Our team has BOTS: ");
+                            alert.push_str("Our team has BOTS: ");
                         } else {
-                            alert.push_str("BOT Alert: Enemy team has BOTS: ");
+                            alert.push_str("Enemy team has BOTS: ");
                         }
-                    },
+                    }
                     None => {
-                        alert.push_str("BOT Alert: The server has BOTS: ");
+                        alert.push_str("The server has BOTS: ");
                     }
                 }
             }
@@ -203,30 +223,30 @@ impl Server {
         }
 
         // Broadcast message
-        com.say(&alert, set);
+        let _cmd = rcon.cmd(&format!("say \"{}\"", alert)).await;
     }
 
     /// Update local info on server players
-    pub fn refresh(&mut self, set: &Settings, com: &mut Commander) {
+    pub fn refresh(&mut self) {
         println!("Refreshing server.");
 
         for p in self.players.values_mut().into_iter() {
             p.accounted = false;
         }
-
-        com.run_command(&format!("{}; wait 200; {}; wait 100; echo refreshcomplete", COM_STATUS, COM_LOBBY), &set.key);
     }
 
     /// Remove players who aren't present on the server anymore
     /// (This method will be called automatically in a rexes command)
-    pub fn prune(&mut self, set: &Settings, com: &mut Commander) {
+    pub fn prune(&mut self) {
         self.players.retain(|_, v| {
             if !v.accounted && v.bot {
                 println!("Bot disconnected: {}", v.name);
             }
+            if !v.accounted {
+                println!("Player Pruned: {}", v.name);
+            }
+
             v.accounted
         });
-
-        com.run_command("wait 100; echo prunecomplete", &set.key);
     }
 }

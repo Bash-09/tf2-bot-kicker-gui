@@ -8,13 +8,13 @@ use regex::Regex;
 use super::player::Player;
 
 pub struct BotChecker {
-    bots_regx: Vec<Regex>,
-    bots_uuid: Vec<String>,
+    pub bots_regx: Vec<Regex>,
+    pub bots_uuid: Vec<String>,
 }
 
 impl BotChecker {
     pub fn new() -> BotChecker {
-        BotChecker{
+        BotChecker {
             bots_regx: Vec::new(),
             bots_uuid: Vec::new(),
         }
@@ -38,12 +38,17 @@ impl BotChecker {
         false
     }
 
+    #[allow(dead_code)]
     pub fn check_bot(&self, p: &Player) -> bool {
         self.check_bot_steamid(&p.steamid) || self.check_bot_name(&p.name)
     }
 
-    pub fn append_uuid(&mut self, uuid: String) {
-        self.bots_uuid.push(uuid);
+    pub fn append_steamid(&mut self, uuid: &str) {
+        self.bots_uuid.push(uuid.to_string());
+    }
+
+    pub fn append_regex(&mut self, reg: Regex) {
+        self.bots_regx.push(reg);
     }
 
     /// Create a vector storing all steamid3's found within a file
@@ -54,8 +59,12 @@ impl BotChecker {
         let mut file = File::open(filename)?;
 
         let mut contents: String = String::new();
-        file.read_to_string(&mut contents)
-            .unwrap_or_else(|_| panic!("Failed to read file cfg/{} for bot configuration.", filename));
+        file.read_to_string(&mut contents).unwrap_or_else(|_| {
+            panic!(
+                "Failed to read file cfg/{} for bot configuration.",
+                filename
+            )
+        });
 
         for m in reg.find_iter(&contents) {
             match reg.captures(m.as_str()) {
@@ -76,12 +85,18 @@ impl BotChecker {
         let mut file = File::open(filename)?;
 
         let mut contents: String = String::new();
-        file.read_to_string(&mut contents)
-            .unwrap_or_else(|_| panic!("Failed to read file cfg/{} for bot configuration.", filename));
+        file.read_to_string(&mut contents).unwrap_or_else(|_| {
+            panic!(
+                "Failed to read file cfg/{} for bot configuration.",
+                filename
+            )
+        });
 
         for line in contents.lines() {
             let txt = line.trim();
-            if txt.is_empty() {continue;}
+            if txt.is_empty() {
+                continue;
+            }
 
             list.push(Regex::new(txt)?);
         }
@@ -90,5 +105,3 @@ impl BotChecker {
         Ok(())
     }
 }
-
-

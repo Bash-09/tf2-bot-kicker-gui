@@ -1,3 +1,4 @@
+use std::fs::read_dir;
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
@@ -14,6 +15,21 @@ pub struct LogWatcher {
 }
 
 impl LogWatcher {
+    // Try to open this TF2 directory
+    pub fn use_directory(dir: &str) -> Option<LogWatcher> {
+        if read_dir(format!("{}/tf/cfg", dir)).is_ok() {
+            match LogWatcher::register(&format!("{}/tf/console.log", dir)) {
+                Ok(lw) => {
+                    return Some(lw);
+                }
+                Err(e) => {
+                    println!("Failed to register log file: {}", e);
+                }
+            }
+        }
+        None
+    }
+
     pub fn register(filename: &str) -> Result<LogWatcher, io::Error> {
         let f = match File::open(&filename) {
             Ok(x) => x,
@@ -37,13 +53,11 @@ impl LogWatcher {
     }
 
     pub fn next_line(&mut self) -> Option<String> {
-
         let mut line = String::new();
         let resp = self.reader.read_line(&mut line);
 
         match resp {
             Ok(len) => {
-
                 // Get next line
                 if len > 0 {
                     self.pos += len as u64;
@@ -62,17 +76,16 @@ impl LogWatcher {
                 // Reopen the log file if nothing has happened for long enough in case the file has been replaced.
                 let time = SystemTime::now().duration_since(self.last_activity);
                 if time.unwrap().as_secs() > 10 {
-
                     let f = match File::open(&self.filename) {
                         Ok(x) => x,
                         Err(_) => return None,
                     };
-            
+
                     let metadata = match f.metadata() {
                         Ok(x) => x,
                         Err(_) => return None,
                     };
-            
+
                     let mut reader = BufReader::new(f);
                     let pos = metadata.len();
                     reader.seek(SeekFrom::Start(pos)).unwrap();
@@ -82,12 +95,10 @@ impl LogWatcher {
                     self.last_activity = SystemTime::now();
                     return None;
                 }
-                
 
                 self.reader.seek(SeekFrom::Start(self.pos)).unwrap();
                 return None;
-
-            },
+            }
             Err(err) => {
                 println!("Logwatcher error: {}", err);
             }
@@ -95,5 +106,4 @@ impl LogWatcher {
 
         None
     }
-
 }

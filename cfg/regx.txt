@@ -53,3 +53,4 @@ vk\.com\\/warcrimer
 vk.com\\/thenosok
 O.?M.?E.?G.?A.?T.?R.?O.?N.?I.?C.?
 irc\.myg0t\.gg:6667#myg0t
+Debug User./\.

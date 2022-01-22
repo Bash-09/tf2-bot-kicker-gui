@@ -1,21 +1,36 @@
 #![allow(non_upper_case_globals)]
 #![allow(unused_variables)]
 
-use crate::server::*;
+use crate::{server::*, app::append_line};
 
 use regex::{Captures, Regex};
 
 use crate::server::player::*;
 
-use super::{settings::Settings, console::commander::Commander, bot_checker::BotChecker};
+use super::{bot_checker::BotChecker, settings::Settings};
 
 pub struct LogMatcher {
     pub r: Regex,
-    pub f: fn(serv: &mut Server, str: &str, caps: Captures, set: &Settings, com: &mut Commander, paused: &mut bool, bot_checker: &mut BotChecker),
+    pub f: fn(
+        serv: &mut Server,
+        str: &str,
+        caps: Captures,
+        set: &Settings,
+        bot_checker: &mut BotChecker,
+    ),
 }
 
 impl LogMatcher {
-    pub fn new(r: Regex, f: fn(serv: &mut Server, str: &str, caps: Captures, set: &Settings, com: &mut Commander, paused: &mut bool, bot_checker: &mut BotChecker)) -> LogMatcher {
+    pub fn new(
+        r: Regex,
+        f: fn(
+            serv: &mut Server,
+            str: &str,
+            caps: Captures,
+            set: &Settings,
+            bot_checker: &mut BotChecker,
+        ),
+    ) -> LogMatcher {
         LogMatcher { r, f }
     }
 }
@@ -36,7 +51,13 @@ impl LogMatcher {
 // If no player exists on the server with a steamid from here, it creates a new player and adds it to the list
 pub const r_status: &str =
     r#"^#\s*(\d+)\s"(.*)"\s+\[(U:\d:\d+)\]\s+(\d*:?\d\d:\d\d)\s+\d+\s*\d+\s*(\w+).*$"#;
-pub fn f_status(serv: &mut Server, str: &str, caps: Captures, set: &Settings, com: &mut Commander, paused: &mut bool, bot_checker: &mut BotChecker) {
+pub fn f_status(
+    serv: &mut Server,
+    str: &str,
+    caps: Captures,
+    set: &Settings,
+    bot_checker: &mut BotChecker,
+) {
     let steamid = caps[3].to_string();
 
     let mut state = State::Spawning;
@@ -74,11 +95,11 @@ pub fn f_status(serv: &mut Server, str: &str, caps: Captures, set: &Settings, co
                 println!("Unknown bot joining: {} - [{}]", name, steamid);
             }
 
-            bot_checker.append_uuid(steamid.clone());
+            bot_checker.append_steamid(&steamid);
         }
 
         let mut new_connection: bool = false;
-        if time < 20 {
+        if (time as f32) < set.alert_period {
             new_connection = true;
         }
 
@@ -97,7 +118,7 @@ pub fn f_status(serv: &mut Server, str: &str, caps: Captures, set: &Settings, co
         };
 
         if set.record_steamids && p.bot && !p.known_steamid {
-            p.export_steamid();
+            append_line(&p.get_export_steamid(), &set.steamid_list);
         }
 
         serv.players.insert(p.steamid.clone(), p);
@@ -128,7 +149,13 @@ fn get_time(input: String) -> u32 {
 // be used to reliably check which team the user is on, it can only check relative to the user (same/opposite team)
 pub const r_lobby: &str =
     r#"^  Member\[(\d+)] \[(U:\d:\d+)]  team = TF_GC_TEAM_(\w+)  type = MATCH_PLAYER\s*$"#;
-pub fn f_lobby(serv: &mut Server, str: &str, caps: Captures, set: &Settings, com: &mut Commander, paused: &mut bool, bot_checker: &mut BotChecker) {
+pub fn f_lobby(
+    serv: &mut Server,
+    str: &str,
+    caps: Captures,
+    set: &Settings,
+    bot_checker: &mut BotChecker,
+) {
     let mut team = Team::None;
 
     match &caps[3] {
@@ -141,6 +168,7 @@ pub fn f_lobby(serv: &mut Server, str: &str, caps: Captures, set: &Settings, com
         None => {}
         Some(p) => {
             p.team = team;
+            p.accounted = true;
 
             // Alert server of bot joining the server
             if p.new_connection && p.bot && set.join_alert {
@@ -151,35 +179,13 @@ pub fn f_lobby(serv: &mut Server, str: &str, caps: Captures, set: &Settings, com
     }
 }
 
-pub const r_user_connect: &str = r#"^Connected to .*"#;
-pub fn f_user_connect(serv: &mut Server, str: &str, caps: Captures, set: &Settings, com: &mut Commander, paused: &mut bool, bot_checker: &mut BotChecker) {
-    println!("Connected to server.");
-    *paused = false;
-}
-
 pub const r_user_disconnect: &str = r#"^Disconnecting from .*"#;
-pub fn f_user_disconnect(serv: &mut Server, str: &str, caps: Captures, set: &Settings, com: &mut Commander, paused: &mut bool, bot_checker: &mut BotChecker) {
-    println!("Disconnected from server.");
-    *paused = true;
+pub fn f_user_disconnect(
+    serv: &mut Server,
+    str: &str,
+    caps: Captures,
+    set: &Settings,
+    bot_checker: &mut BotChecker,
+) {
     serv.clear();
-}
-
-// Indicates all commands have been run server info updated and is ready to be cleared of old players
-pub const r_refresh_complete: &str = r#"^refreshcomplete\s*$"#;
-pub fn f_refresh_complete(serv: &mut Server, str: &str, caps: Captures, set: &Settings, com: &mut Commander, paused: &mut bool, bot_checker: &mut BotChecker) {
-    serv.prune(set, com);
-}
-
-// Indicates old players have been removed and action can be taken against still-existing bots
-pub const r_update: &str = r#"^prunecomplete\s*$"#;
-pub fn f_update(serv: &mut Server, str: &str, caps: Captures, set: &Settings, com: &mut Commander, paused: &mut bool, bot_checker: &mut BotChecker) {
-    serv.kick_bots(set, com);
-    serv.announce_bots(set, com);
-}
-
-// Indicates the player is not currently in a casual lobby and to pause the program until they are
-pub const r_inactive: &str = r#"^Failed to find lobby shared object\s*$"#;
-pub fn f_inactive(serv: &mut Server, str: &str, caps: Captures, set: &Settings, com: &mut Commander, paused: &mut bool, bot_checker: &mut BotChecker) {
-    println!("User is not connected to a valid server, pausing until a server is joined.");
-    *paused = true;
 }

@@ -1,10 +1,12 @@
-use std::{time::SystemTime, fs::read_dir};
+use std::{ops::RangeInclusive, time::SystemTime, fs::OpenOptions, io::Write};
 
-use chrono::{Local, DateTime};
-use clipboard::{ClipboardProvider, ClipboardContext};
-use eframe::{egui::{self, Ui, Color32, RichText}, epi};
+use async_trait::async_trait;
+use chrono::{DateTime, Local};
+use clipboard::{ClipboardContext, ClipboardProvider};
 
 pub mod timer;
+use egui::{Color32, RichText, Ui};
+use rcon::Connection;
 use regex::Regex;
 use timer::*;
 
@@ -14,37 +16,49 @@ use settings::*;
 pub mod server;
 use server::*;
 
-pub mod console;
-use console::*;
+use tokio::net::TcpStream;
 
 mod regexes;
-use self::{regexes::*, server::player::{Team, Player, State}};
+use self::{
+    logwatcher::LogWatcher,
+    regexes::*,
+    server::player::{Player, State, Team},
+};
 
 pub mod bot_checker;
 use bot_checker::*;
 
-use self::{console::{commander::Commander, log_watcher::LogWatcher}, regexes::LogMatcher};
+pub mod logwatcher;
+
+use glium_app::Surface;
 
 pub struct TF2BotKicker {
+    refresh_timer: Timer,
+    kick_timer: Timer,
+    alert_timer: Timer,
 
-    timer: Timer,
     message: String,
-    paused: bool,
 
     settings: Settings,
-    console: Option<Console>,
+    rcon: rcon::Result<Connection<TcpStream>>,
+    log: Option<LogWatcher>,
 
     server: Server,
-    regexes: Vec<LogMatcher>,
-    bot_checker: BotChecker,
 
+    regx_status: LogMatcher,
+    regx_lobby: LogMatcher,
+    regx_disconnect: LogMatcher,
+
+    export_steamid: Option<String>,
+    steamid: String,
+    export_regex: Option<String>,
+
+    bot_checker: BotChecker,
 }
 
-impl Default for TF2BotKicker {
-
+impl TF2BotKicker {
     // Create the application
-    fn default() -> Self {
-
+    pub async fn new() -> TF2BotKicker {
         let settings: Settings;
 
         // Attempt to load settings, create new default settings if it can't load an existing file
@@ -55,381 +69,469 @@ impl Default for TF2BotKicker {
             settings = set.unwrap();
         }
 
-        // Try to oad set TF2 directory
-        let console = use_directory(&settings.directory);
-
         // Load regexes
-        let reg = vec![
-            LogMatcher::new(Regex::new(r_status).unwrap(), f_status),
-            LogMatcher::new(Regex::new(r_lobby).unwrap(), f_lobby),
-            LogMatcher::new(Regex::new(r_user_connect).unwrap(), f_user_connect),
-            LogMatcher::new(Regex::new(r_user_disconnect).unwrap(), f_user_disconnect),
-            LogMatcher::new(Regex::new(r_update).unwrap(), f_update),
-            LogMatcher::new(Regex::new(r_inactive).unwrap(), f_inactive),
-            LogMatcher::new(Regex::new(r_refresh_complete).unwrap(), f_refresh_complete),
-        ];
+        let regx_status = LogMatcher::new(Regex::new(r_status).unwrap(), f_status);
+        let regx_lobby = LogMatcher::new(Regex::new(r_lobby).unwrap(), f_lobby);
+        let regx_disconnect =
+            LogMatcher::new(Regex::new(r_user_disconnect).unwrap(), f_user_disconnect);
+
 
         let mut message = String::from("Loaded");
 
         // Create bot checker and load any bot detection rules saved
         let mut bot_checker = BotChecker::new();
-        for uuid_list in &settings.uuid_lists {
+        for uuid_list in &settings.steamid_lists {
             match bot_checker.add_steamid_list(uuid_list) {
-                Ok(_) => {},
+                Ok(_) => {}
                 Err(e) => message = format!("Error loading {}: {}", uuid_list, e),
             }
         }
         for regex_list in &settings.regex_lists {
             match bot_checker.add_regex_list(regex_list) {
-                Ok(_) => {},
+                Ok(_) => {}
                 Err(e) => message = format!("Error loading {}: {}", regex_list, e),
-            }        
+            }
         }
 
+        let rcon = Connection::connect("127.0.0.1:27015", &settings.rcon_password).await;
+        let log = LogWatcher::use_directory(&settings.tf2_directory);
+
         Self {
-            timer: Timer::new(),
-            settings,
+            refresh_timer: Timer::new(),
+            alert_timer: Timer::new(),
+            kick_timer: Timer::new(),
             message,
-            console,
-            paused: true,
+            settings,
+            rcon,
+            log,
             server: Server::new(),
-            regexes: reg,
+
+            regx_status,
+            regx_lobby,
+            regx_disconnect,
+
+            export_steamid: None,
+            steamid: String::new(),
+            export_regex: None,
+
             bot_checker,
+        }
+    }
+
+    pub async fn rcon_connected(&mut self) -> bool {
+        match &mut self.rcon {
+            Ok(con) => match con.cmd("echo Ping").await {
+                Ok(_) => {
+                    return true;
+                }
+                Err(e) => {
+                    self.rcon = Err(e);
+                    return false;
+                }
+            },
+            Err(_) => {
+                match Connection::connect("127.0.0.1:27015", &self.settings.rcon_password).await {
+                    Ok(con) => {
+                        self.rcon = Ok(con);
+                        return true;
+                    }
+                    Err(e) => {
+                        self.rcon = Err(e);
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+
+    pub async fn refresh(&mut self) {
+        if !self.rcon_connected().await {
+            return;
+        }
+        self.server.prune();
+
+        let status = self
+            .rcon
+            .as_mut()
+            .unwrap()
+            .cmd("status")
+            .await;
+        let lobby = self.rcon.as_mut().unwrap().cmd("tf_lobby_debug").await;
+
+        if status.is_err() || lobby.is_err() {
+            return;
+        }
+
+        let lobby = lobby.unwrap();
+
+        if lobby.contains("Failed to find lobby shared object") {
+            self.server.clear();
+            return;
+        }
+
+        self.server.refresh();
+
+        for l in lobby.lines() {
+            match self.regx_lobby.r.captures(l) {
+                None => {}
+                Some(c) => {
+                    (self.regx_lobby.f)(
+                        &mut self.server,
+                        l,
+                        c,
+                        &self.settings,
+                        &mut self.bot_checker,
+                    );
+                }
+            }
         }
     }
 }
 
-impl epi::App for TF2BotKicker {
-    fn name(&self) -> &str {
-        "TF2 Bot Kicker by Bash09/Googe14"
+#[async_trait]
+impl glium_app::Application for TF2BotKicker {
+    fn launch_settings(&self) -> glium_app::WindowBuilder {
+        glium_app::WindowBuilder::new()
+            .with_title("TF2 Bot Kicker by Bash09/Googe14")
+            .with_resizable(true)
+            .with_inner_size(glium_app::PhysicalSize::new(800, 400))
     }
 
-    /// Called once before the first frame.
-    fn setup(
-        &mut self,
-        _ctx: &egui::CtxRef,
-        _frame: &eframe::epi::Frame,
-        _storage: Option<&dyn epi::Storage>,
-    ) {
-
-
-
+    fn init(&mut self, _ctx: &mut glium_app::context::Context) {
+        self.refresh_timer.reset();
+        self.kick_timer.reset();
+        self.alert_timer.reset();
     }
 
-    // Called every frame
-    fn update(&mut self, ctx: &egui::CtxRef, frame: &eframe::epi::Frame) {
-        // Ensures update is called again as soon as this one is finished.
-        ctx.request_repaint();
+    async fn update(&mut self, _t: &glium_app::timer::Timer) {
+        let refresh = self.refresh_timer.go(self.settings.refresh_period);
 
-        // Skip the update if it hasn't been very long
-        let t = self.timer.go(self.settings.period);
-        if t.is_none() {return;}
-
-        // Update if it's time to refresh
-        if self.timer.update() && !self.paused && self.console.is_some() {
-            let system_time = SystemTime::now();
-            let datetime: DateTime<Local> = system_time.into();
-
-            match &mut self.console {
-                Some(con) => {
-                    self.server.refresh(&self.settings, &mut con.com);
-                    self.message = format!("Refreshing... ({})", datetime.format("%T"));
-                },
-                None => {}
-            }
-
+        if refresh.is_none() {
+            return;
         }
 
-        // Check if a valid TF2 directory has been loaded
-        match &mut self.console {
-            Some(con) => {
+        self.kick_timer.go(self.settings.kick_period);
+        self.alert_timer.go(self.settings.alert_period);
+
+        // Refresh server
+        if self.refresh_timer.update() {
+            self.refresh().await;
+
+            let system_time = SystemTime::now();
+            let datetime: DateTime<Local> = system_time.into();
+            self.message = format!("Refreshed ({})", datetime.format("%T"));
+        }
+
+        match &mut self.log {
+            Some(lw) => {
                 // If there is a loaded dir, process any new console lines
                 loop {
-                    match con.log.next_line() {
+                    match lw.next_line() {
                         Some(line) => {
-                            for r in self.regexes.iter() {
-                                match r.r.captures(&line) {
-                                    None => {}
-                                    Some(c) => {
-                                        (r.f)(&mut self.server, &line, c, &self.settings, &mut con.com, &mut self.paused, &mut self.bot_checker);
-                                    }
+                            match self.regx_disconnect.r.captures(&line) {
+                                None => {}
+                                Some(c) => {
+                                    (self.regx_disconnect.f)(
+                                        &mut self.server,
+                                        &line,
+                                        c,
+                                        &self.settings,
+                                        &mut self.bot_checker,
+                                    );
+                                    continue;
                                 }
                             }
-                        },
-                        None => {break;}
+
+                            match self.regx_status.r.captures(&line) {
+                                Some(c) => {
+                                    (self.regx_status.f)(
+                                        &mut self.server,
+                                        &line,
+                                        c,
+                                        &self.settings,
+                                        &mut self.bot_checker,
+                                    );
+                                    continue;
+                                }
+                                None => {}
+                            }
+                        }
+                        None => {
+                            break;
+                        }
                     }
                 }
-            },
+            }
             None => {}
         }
 
-        // Tracks if the settings need to be saved
-        let mut settings_changed = false;
+        // Kick Bots
+        if self.kick_timer.update() {
+            if self.rcon_connected().await {
+                self.server
+                    .kick_bots(&self.settings, self.rcon.as_mut().unwrap())
+                    .await;
+            }
+        }
 
-        // Top menu bar
-        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            egui::menu::bar(ui, |ui| {
-                ui.menu_button("File", |ui| {
+        // Send chat alerts
+        if self.alert_timer.update() {
+            if self.rcon_connected().await {
+                self.server
+                    .announce_bots(&self.settings, self.rcon.as_mut().unwrap())
+                    .await;
+            }
+        }
+    }
 
-                    if ui.button("Set TF2 Directory").clicked() {
-                        match rfd::FileDialog::new().pick_folder() {
-                            Some(pb) => {
-                                let dir;
-                                match pb.strip_prefix(std::env::current_dir().unwrap()) {
-                                    Ok(pb) => {
-                                        dir = pb.to_string_lossy().to_string();
-                                    },
-                                    Err(_) => {
-                                        dir = pb.to_string_lossy().to_string();
+    fn render(&mut self, ctx: &mut glium_app::context::Context) {
+        let mut target = ctx.dis.draw();
+        target.clear_color_and_depth((0.5, 0.7, 0.8, 1.0), 1.0);
+
+        let (_, shapes) = ctx.gui.run(&ctx.dis, |ctx| {
+
+            // Tracks if the settings need to be saved
+            let mut settings_changed = false;
+
+            // Top menu bar
+            egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
+                egui::menu::bar(ui, |ui| {
+                    ui.menu_button("File", |ui| {
+
+                        if ui.button("Set TF2 Directory").clicked() {
+                            match rfd::FileDialog::new().pick_folder() {
+                                Some(pb) => {
+                                    let dir;
+                                    match pb.strip_prefix(std::env::current_dir().unwrap()) {
+                                        Ok(pb) => {
+                                            dir = pb.to_string_lossy().to_string();
+                                        },
+                                        Err(_) => {
+                                            dir = pb.to_string_lossy().to_string();
+                                        }
                                     }
-                                }
-                                self.settings.directory = dir;
-                                self.console = use_directory(&self.settings.directory);
-                                settings_changed = true;
-                            },
-                            None => {}
+                                    self.settings.tf2_directory = dir;
+                                    self.log = LogWatcher::use_directory(&self.settings.tf2_directory);
+                                    settings_changed = true;
+                                },
+                                None => {}
+                            }
                         }
-                    }
 
-                    if ui.button("Add Regex List").clicked() {
-                        match rfd::FileDialog::new().set_directory("cfg").pick_file() {
-                            Some(pb) => {
-                                let dir;
-                                // Try to make it a relative directory instead of going from root
-                                match pb.strip_prefix(std::env::current_dir().unwrap()) {
-                                    Ok(pb) => {
-                                        dir = pb.to_string_lossy().to_string();
-                                    },
-                                    Err(_) => {
-                                        dir = pb.to_string_lossy().to_string();
+                        if ui.button("Add Regex List").clicked() {
+                            match rfd::FileDialog::new().set_directory("cfg").pick_file() {
+                                Some(pb) => {
+                                    let dir;
+                                    // Try to make it a relative directory instead of going from root
+                                    match pb.strip_prefix(std::env::current_dir().unwrap()) {
+                                        Ok(pb) => {
+                                            dir = pb.to_string_lossy().to_string();
+                                        },
+                                        Err(_) => {
+                                            dir = pb.to_string_lossy().to_string();
+                                        }
                                     }
-                                }
-                                match self.bot_checker.add_regex_list(&dir) {
-                                    Ok(_) => {
-                                        self.message = format!("Added {} as a regex list", &dir.split("/").last().unwrap());
-                                    },
-                                    Err(e) => {
-                                        self.message = format!("{}", e);
+                                    match self.bot_checker.add_regex_list(&dir) {
+                                        Ok(_) => {
+                                            self.message = format!("Added {} as a regex list", &dir.split("/").last().unwrap());
+                                        },
+                                        Err(e) => {
+                                            self.message = format!("{}", e);
+                                        }
                                     }
-                                }
-                                self.settings.regex_lists.push(dir);
-                                settings_changed = true;
-                            },
-                            None => {}
+                                    self.settings.regex_lists.push(dir);
+                                    settings_changed = true;
+                                },
+                                None => {}
+                            }
                         }
-                    }
 
-                    if ui.button("Add SteamID List").clicked() {
-                        match rfd::FileDialog::new().set_directory("cfg").pick_file() {
-                            Some(pb) => {
-                                let dir;
-                                match pb.strip_prefix(std::env::current_dir().unwrap()) {
-                                    Ok(pb) => {
-                                        dir = pb.to_string_lossy().to_string();
-                                    },
-                                    Err(_) => {
-                                        dir = pb.to_string_lossy().to_string();
+                        if ui.button("Add SteamID List").clicked() {
+                            match rfd::FileDialog::new().set_directory("cfg").pick_file() {
+                                Some(pb) => {
+                                    let dir;
+                                    match pb.strip_prefix(std::env::current_dir().unwrap()) {
+                                        Ok(pb) => {
+                                            dir = pb.to_string_lossy().to_string();
+                                        },
+                                        Err(_) => {
+                                            dir = pb.to_string_lossy().to_string();
+                                        }
                                     }
-                                }
-                                match self.bot_checker.add_steamid_list(&dir) {
-                                    Ok(_) => {
-                                        self.message = format!("Added {} as a steamid list", &dir.split("/").last().unwrap());
-                                    },
-                                    Err(e) => {
-                                        self.message = format!("{}", e);
+                                    match self.bot_checker.add_steamid_list(&dir) {
+                                        Ok(_) => {
+                                            self.message = format!("Added {} as a steamid list", &dir.split("/").last().unwrap());
+                                        },
+                                        Err(e) => {
+                                            self.message = format!("{}", e);
+                                        }
                                     }
-                                }
-                                self.settings.uuid_lists.push(dir);
-                                settings_changed = true;
-                            },
-                            None => {}
+                                    self.settings.steamid_lists.push(dir);
+                                    settings_changed = true;
+                                },
+                                None => {}
+                            }
                         }
-                    }
-
-                    if ui.button("Quit").clicked() {
-                        frame.quit();
-                    }
-                });
-
-                if ui.button(match self.paused {true => "Start", false => "Pause"}).clicked() {
-                    self.paused = !self.paused;
-                    self.message = String::from(match self.paused {true => "Paused", false => "Started"});
-                }
-            });
-        });
-
-        // Message and eframe/egui credits
-        egui::TopBottomPanel::bottom("bottom_panel").show(ctx, |ui| {
-
-            // Display a little bit of information
-            ui.label(&self.message);
-
-            // Credits at the bottom left
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 0.0;
-                ui.label("powered by ");
-                ui.hyperlink_to("egui", "https://github.com/emilk/egui");
-                ui.label(" and ");
-                ui.hyperlink_to("eframe", "https://github.com/emilk/egui/tree/master/eframe");
-            });
-
-        });
-
-        // Left panel
-        egui::SidePanel::left("side_panel").show(ctx, |ui| {
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                ui.heading("Settings");
-
-                ui.horizontal(|ui| {
-                    ui.label("User: ");
-                    settings_changed |= ui.text_edit_singleline(&mut self.settings.user).changed();
-                });
-
-                settings_changed |= ui.checkbox(&mut self.settings.kick, "Kick Bots").changed();
-                settings_changed |= ui.checkbox(&mut self.settings.join_alert, "Join Alerts").changed();
-                settings_changed |= ui.checkbox(&mut self.settings.chat_reminders, "Chat Reminders").changed();
-
-                ui.horizontal(|ui| {
-                    ui.label("Period: ");
-                    settings_changed |= ui.add(egui::Slider::new(&mut self.settings.period, 1.0..=60.0)).changed();
-                });
-
-                // Command Key
-                ui.horizontal(|ui| {
-                    ui.label(&format!("Command key: {}", key_to_str(self.settings.key)));
-                    ui.menu_button("Change", |ui| {
-
-                        egui::ScrollArea::vertical().show(ui, |ui| {
-
-                            if ui.button("F1").clicked() {self.settings.key = str_to_key("F1"); settings_changed = true;}
-                            if ui.button("F2").clicked() {self.settings.key = str_to_key("F2"); settings_changed = true;}
-                            if ui.button("F3").clicked() {self.settings.key = str_to_key("F3"); settings_changed = true;}
-                            if ui.button("F4").clicked() {self.settings.key = str_to_key("F4"); settings_changed = true;}
-                            if ui.button("F5").clicked() {self.settings.key = str_to_key("F5"); settings_changed = true;}
-                            if ui.button("F6").clicked() {self.settings.key = str_to_key("F6"); settings_changed = true;}
-                            if ui.button("F7").clicked() {self.settings.key = str_to_key("F7"); settings_changed = true;}
-                            if ui.button("F8").clicked() {self.settings.key = str_to_key("F8"); settings_changed = true;}
-                            if ui.button("F9").clicked() {self.settings.key = str_to_key("F9"); settings_changed = true;}
-                            if ui.button("F10").clicked() {self.settings.key = str_to_key("F10"); settings_changed = true;}
-                            if ui.button("F11").clicked() {self.settings.key = str_to_key("F11"); settings_changed = true;}
-                            if ui.button("F12").clicked() {self.settings.key = str_to_key("F12"); settings_changed = true;}
-                            if ui.button("kp_ins").clicked() {self.settings.key = str_to_key("kp_ins"); settings_changed = true;}
-                            if ui.button("kp_end").clicked() {self.settings.key = str_to_key("kp_end"); settings_changed = true;}
-                            if ui.button("kp_downarrow").clicked() {self.settings.key = str_to_key("kp_downarrow"); settings_changed = true;}
-                            if ui.button("kp_pgdn").clicked() {self.settings.key = str_to_key("kp_pgdn"); settings_changed = true;}
-                            if ui.button("kp_leftarrow").clicked() {self.settings.key = str_to_key("kp_leftarrow"); settings_changed = true;}
-                            if ui.button("kp_5").clicked() {self.settings.key = str_to_key("kp_5"); settings_changed = true;}
-                            if ui.button("kp_rightarrow").clicked() {self.settings.key = str_to_key("kp_rightarrow"); settings_changed = true;}
-                            if ui.button("kp_home").clicked() {self.settings.key = str_to_key("kp_home"); settings_changed = true;}
-                            if ui.button("kp_uparrow").clicked() {self.settings.key = str_to_key("kp_uparrow"); settings_changed = true;}
-                            if ui.button("kp_pgup").clicked() {self.settings.key = str_to_key("kp_pgup"); settings_changed = true;}
-                            if ui.button("numlock").clicked() {self.settings.key = str_to_key("numlock"); settings_changed = true;}
-                            if ui.button("scrolllock").clicked() {self.settings.key = str_to_key("scrolllock"); settings_changed = true;}
-                            if ui.button("capslock").clicked() {self.settings.key = str_to_key("capslock"); settings_changed = true;}
-                            if ui.button("shift").clicked() {self.settings.key = str_to_key("shift"); settings_changed = true;}
-                            if ui.button("A").clicked() {self.settings.key = str_to_key("A"); settings_changed = true;}
-                            if ui.button("B").clicked() {self.settings.key = str_to_key("B"); settings_changed = true;}
-                            if ui.button("C").clicked() {self.settings.key = str_to_key("C"); settings_changed = true;}
-                            if ui.button("D").clicked() {self.settings.key = str_to_key("D"); settings_changed = true;}
-                            if ui.button("E").clicked() {self.settings.key = str_to_key("E"); settings_changed = true;}
-                            if ui.button("F").clicked() {self.settings.key = str_to_key("F"); settings_changed = true;}
-                            if ui.button("G").clicked() {self.settings.key = str_to_key("G"); settings_changed = true;}
-                            if ui.button("H").clicked() {self.settings.key = str_to_key("H"); settings_changed = true;}
-                            if ui.button("I").clicked() {self.settings.key = str_to_key("I"); settings_changed = true;}
-                            if ui.button("J").clicked() {self.settings.key = str_to_key("J"); settings_changed = true;}
-                            if ui.button("K").clicked() {self.settings.key = str_to_key("K"); settings_changed = true;}
-                            if ui.button("L").clicked() {self.settings.key = str_to_key("L"); settings_changed = true;}
-                            if ui.button("M").clicked() {self.settings.key = str_to_key("M"); settings_changed = true;}
-                            if ui.button("N").clicked() {self.settings.key = str_to_key("N"); settings_changed = true;}
-                            if ui.button("O").clicked() {self.settings.key = str_to_key("O"); settings_changed = true;}
-                            if ui.button("P").clicked() {self.settings.key = str_to_key("P"); settings_changed = true;}
-                            if ui.button("Q").clicked() {self.settings.key = str_to_key("Q"); settings_changed = true;}
-                            if ui.button("R").clicked() {self.settings.key = str_to_key("R"); settings_changed = true;}
-                            if ui.button("S").clicked() {self.settings.key = str_to_key("S"); settings_changed = true;}
-                            if ui.button("T").clicked() {self.settings.key = str_to_key("T"); settings_changed = true;}
-                            if ui.button("U").clicked() {self.settings.key = str_to_key("U"); settings_changed = true;}
-                            if ui.button("V").clicked() {self.settings.key = str_to_key("V"); settings_changed = true;}
-                            if ui.button("W").clicked() {self.settings.key = str_to_key("W"); settings_changed = true;}
-                            if ui.button("X").clicked() {self.settings.key = str_to_key("X"); settings_changed = true;}
-                            if ui.button("Y").clicked() {self.settings.key = str_to_key("Y"); settings_changed = true;}
-                            if ui.button("Z").clicked() {self.settings.key = str_to_key("Z"); settings_changed = true;}
-
-                        });
 
                     });
                 });
+            });
 
-                ui.label("");
-                ui.heading("Bot Detection Rules");
+            // Message and eframe/egui credits
+            egui::TopBottomPanel::bottom("bottom_panel").show(ctx, |ui| {
 
-                ui.checkbox(&mut self.settings.record_steamids, &format!("Automatically append bot steamids to {}", DEFAULT_STEAMID_LIST));
+                // Display a little bit of information
+                ui.label(&self.message);
 
-                ui.collapsing("Regex Lists", |ui| {
-                    let mut ind: Option<usize> = None;
-                    for (i, l) in self.settings.regex_lists.iter().enumerate() {
-                        let lab = ui.selectable_label(false, l.split("/").last().unwrap());
-                        if lab.clicked() {
-                            ind = Some(i);
-                        }
-                        lab.on_hover_text("Click to remove");
-                    }
-                    match ind {
-                        Some(i) => {
-                            self.settings.regex_lists.remove(i);
-                            settings_changed = true;
-                        },
-                        None => {}
-                    }
-                });
-
-                ui.collapsing("SteamID Lists", |ui| {
-                    let mut ind: Option<usize> = None;
-                    for (i, l) in self.settings.uuid_lists.iter().enumerate() {
-                        let lab = ui.selectable_label(false, l.split("/").last().unwrap());
-                        if lab.clicked() {
-                            ind = Some(i);
-                        }
-                        lab.on_hover_text("Click to remove");
-                    }
-                    match ind {
-                        Some(i) => {
-                            self.settings.uuid_lists.remove(i);
-                            settings_changed = true;
-                        },
-                        None => {}
-                    }
+                // Credits at the bottom left
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 0.0;
+                    ui.label("powered by ");
+                    ui.hyperlink_to("egui", "https://github.com/emilk/egui");
+                    ui.label(" and ");
+                    ui.hyperlink_to("eframe", "https://github.com/emilk/egui/tree/master/eframe");
                 });
 
             });
 
-        });
+            // Left panel
+            egui::SidePanel::left("side_panel").show(ctx, |ui| {
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    ui.heading("Settings");
 
-        // Main window with info and players
-        egui::CentralPanel::default().show(ctx, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label("User: ");
+                        settings_changed |= ui.text_edit_singleline(&mut self.settings.user).changed();
+                    });
 
-            // Check if a TF2 directory is loaded
-            match &self.console {
+                    ui.horizontal(|ui| {
+                        ui.label("RCon Password: ");
+                        settings_changed |= ui.text_edit_singleline(&mut self.settings.rcon_password).changed();
+                    });
 
-                // Text for if there's no TF2 directory set yet
-                None=> {
+                    ui.label("");
+
+                    ui.horizontal(|ui| {
+                        settings_changed |= ui.add(egui::DragValue::new(&mut self.settings.refresh_period)
+                        .speed(0.1)
+                        .clamp_range(RangeInclusive::new(0.5, 60.0))).changed();
+                        ui.label("Refresh Period");
+                    });
+
+                    settings_changed |= ui.checkbox(&mut self.settings.kick, "Kick Bots").changed();
+                    if self.settings.kick {
+                        ui.horizontal(|ui| {
+                            settings_changed |= ui.add(egui::DragValue::new(&mut self.settings.kick_period)
+                            .speed(0.1)
+                            .clamp_range(RangeInclusive::new(0.5, 60.0))).changed();
+                            ui.label("Kick Period");
+                        });
+                    }
+
+                    
+                    settings_changed |= ui.checkbox(&mut self.settings.join_alert, "Join Alerts").changed();
+                    settings_changed |= ui.checkbox(&mut self.settings.chat_reminders, "Chat Reminders").changed();
+
+                    if self.settings.join_alert || self.settings.chat_reminders {
+                        ui.horizontal(|ui| {
+                            settings_changed |= ui.add(egui::DragValue::new(&mut self.settings.alert_period)
+                            .speed(0.1)
+                            .clamp_range(RangeInclusive::new(0.5, 60.0))).changed();
+                            ui.label("Chat Alert Period");
+                        });
+                    }
+
+                    ui.label("");
+                    ui.heading("Bot Detection Rules");
+
+                    ui.checkbox(&mut self.settings.record_steamids, &format!("Automatically record bot SteamIDs"));
+
+                    ui.label("");
+                    ui.collapsing("Regex Lists", |ui| {
+                        let mut ind: Option<usize> = None;
+                        for (i, l) in self.settings.regex_lists.iter().enumerate() {
+
+                            let active = l.eq(&self.settings.regex_list);
+                            let mut text = RichText::new(l.split("/").last().unwrap());
+                            if active {
+                                text = text.color(Color32::LIGHT_GREEN);
+                            }
+                            ui.collapsing(text, |ui| {
+                                if ui.button("Remove").clicked() {
+                                    ind = Some(i);
+                                }
+                                if !active {
+                                    let set = ui.button("Set Active");
+                                    let set = set.on_hover_text("Recorded Regexes will be added to this file");
+                                    if set.clicked() {
+                                        self.settings.regex_list = l.clone();
+                                        settings_changed = true;
+                                    }
+                                }
+                            });
+                        }
+                        match ind {
+                            Some(i) => {
+                                self.settings.regex_lists.remove(i);
+                                settings_changed = true;
+                            },
+                            None => {}
+                        }
+                    });
+
+                    ui.collapsing("SteamID Lists", |ui| {
+                        let mut ind: Option<usize> = None;
+                        for (i, l) in self.settings.steamid_lists.iter().enumerate() {
+
+                            let active = l.eq(&self.settings.steamid_list);
+                            let mut text = RichText::new(l.split("/").last().unwrap());
+                            if active {
+                                text = text.color(Color32::LIGHT_GREEN);
+                            }
+                            ui.collapsing(text, |ui| {
+                                if ui.button("Remove").clicked() {
+                                    ind = Some(i);
+                                }
+                                if !active {
+                                    let set = ui.button("Set Active");
+                                    let set = set.on_hover_text("Recorded SteamIDs will be added to this file");
+                                    if set.clicked() {
+                                        self.settings.steamid_list = l.clone();
+                                        settings_changed = true;
+                                    }
+                                }
+                            });
+                        }
+                        match ind {
+                            Some(i) => {
+                                self.settings.steamid_lists.remove(i);
+                                settings_changed = true;
+                            },
+                            None => {}
+                        }
+                    });
+
+                });
+
+            });
+
+            // Main window with info and players
+            egui::CentralPanel::default().show(ctx, |ui| {
+
+                if self.log.is_none() {
+
                     ui.label("No valid TF2 directory set. (It should be the one inside \"common\")\n\n");
 
                     ui.label("Instructions:");
 
                     ui.horizontal(|ui| {
                         ui.label("1. Add");
-                        copy_label(&mut self.message, "-condebug -conclearlog", ui);
+                        copy_label(&mut self.message, "-condebug -conclearlog -usercon", ui);
                         ui.label("to your TF2 launch options and start the game.");
                     });
 
                     ui.horizontal(|ui| {
-                        ui.label("2. Add");
-                        copy_label(&mut self.message, &format!("bind {} \"exec command.cfg\"", key_to_str(self.settings.key)), ui);
-                        ui.label("to your autoexec.cfg file. (or change it for whichever key you choose)");
-                    });
-
-                    ui.horizontal(|ui| {
-                        ui.label("3. Click");
+                        ui.label("2. Click");
                         if ui.button("Set your TF2 directory").clicked() {
 
                             match rfd::FileDialog::new().pick_folder() {
@@ -443,8 +545,8 @@ impl epi::App for TF2BotKicker {
                                             dir = pb.to_string_lossy().to_string();
                                         }
                                     }
-                                    self.settings.directory = dir;
-                                    self.console = use_directory(&self.settings.directory);
+                                    self.settings.tf2_directory = dir;
+                                    self.log = LogWatcher::use_directory(&self.settings.tf2_directory);
                                     settings_changed = true;
                                 },
                                 None => {}
@@ -452,147 +554,253 @@ impl epi::App for TF2BotKicker {
                         }
                         ui.label("and navigate to your Team Fortress 2 folder");
                     });
-                    ui.label("4. Start the program and enjoy the game!\n\n");
+                    ui.label("3. Start the program and enjoy the game!\n\n");
                     ui.label("Note: If you have set your TF2 directory but are still seeing this message, ensure you have added the launch options and launched the game before trying again.");
 
-                },
 
-                // UI when there is a TF2 directory present
-                Some(_) => {
-                    if self.server.players.is_empty() {
-                        ui.label("Not currently connected to a server.");
-                    } else {
+                } else {
+                    match &self.rcon {
+                        // Connected and good
+                        Ok(_) => {
 
-                        let width = (ui.available_width()-5.0)/2.0;
+                            if self.server.players.is_empty() {
+                                ui.label("Not currently connected to a server.");
+                            } else {
 
-                        egui::ScrollArea::vertical().show(ui, |ui| {
+                                let width = (ui.available_width()-5.0)/2.0;
 
-                            ui.columns(2, |cols| {
+                                egui::ScrollArea::vertical().show(ui, |ui| {
 
-                                // Headings
-                                cols[0].horizontal(|ui| {
-                                    ui.set_width(width);
-                                    ui.colored_label(Color32::WHITE, "Player Name");
-                            
-                                    ui.with_layout(egui::Layout::right_to_left(), |ui| {
-                                        ui.horizontal(|ui| {
-                                            ui.label("   ");
-                                            ui.colored_label(Color32::WHITE, "Time");
-                                            ui.colored_label(Color32::WHITE, "Info");
+                                    ui.columns(2, |cols| {
+
+                                        // Headings
+                                        cols[0].horizontal(|ui| {
+                                            ui.set_width(width);
+                                            ui.colored_label(Color32::WHITE, "Player Name");
+                                    
+                                            ui.with_layout(egui::Layout::right_to_left(), |ui| {
+                                                ui.horizontal(|ui| {
+                                                    ui.label("   ");
+                                                    ui.colored_label(Color32::WHITE, "Time");
+                                                    ui.colored_label(Color32::WHITE, "Info");
+                                                });
+                                            });
                                         });
+
+                                        cols[1].horizontal(|ui| {
+                                            ui.set_width(width);
+                                            ui.colored_label(Color32::WHITE, "Player Name");
+                                    
+                                            ui.with_layout(egui::Layout::right_to_left(), |ui| {
+                                                ui.horizontal(|ui| {
+                                                    ui.label("   ");
+                                                    ui.colored_label(Color32::WHITE, "Time");
+                                                    ui.colored_label(Color32::WHITE, "Info");
+                                                });
+                                            });
+                                        });
+
+                                        for (_, p) in &mut self.server.players {
+
+                                            if p.team == Team::Invaders {
+                                                render_player(&mut cols[0], &self.settings, &mut self.message, p, width, &mut self.export_steamid, &mut self.export_regex, &mut self.steamid);
+                                            }
+        
+                                            if p.team == Team::Defenders {
+                                                render_player(&mut cols[1], &self.settings, &mut self.message, p, width, &mut self.export_steamid, &mut self.export_regex, &mut self.steamid);
+                                            }
+        
+                                        }
+
                                     });
                                 });
+                            }
+                        },
 
-                                cols[1].horizontal(|ui| {
-                                    ui.set_width(width);
-                                    ui.colored_label(Color32::WHITE, "Player Name");
-                            
-                                    ui.with_layout(egui::Layout::right_to_left(), |ui| {
-                                        ui.horizontal(|ui| {
-                                            ui.label("   ");
-                                            ui.colored_label(Color32::WHITE, "Time");
-                                            ui.colored_label(Color32::WHITE, "Info");
-                                        });
+                        // RCON couldn't connect
+                        Err(e) => {
+                            match e {
+                                // Wrong password
+                                rcon::Error::Auth => {
+                                    ui.heading("Failed to authorise RCON - Password incorrect");
+
+                                    ui.horizontal(|ui| {
+                                        ui.label("Run ");
+                                        copy_label(&mut self.message, &format!("rcon_password {}", &self.settings.rcon_password), ui);
+                                        ui.label("in your TF2 console, and make sure it is in your autoexec.cfg file.");
                                     });
-                                });
+                                },
+                                // Connection issue
+                                _ => {
+                                    ui.heading("Could not connect to TF2:");
 
-                                for (_, p) in &mut self.server.players {
-
-                                    if p.team == Team::Invaders {
-                                        render_player(&mut cols[0], &self.settings, &mut self.message, p, width);
-                                    }
-
-                                    if p.team == Team::Defenders {
-                                        render_player(&mut cols[1], &self.settings, &mut self.message, p, width);
-                                    }
-
+                                    ui.label("");
+                                    ui.label("Is TF2 running?");
+                                    ui.horizontal(|ui| {
+                                        ui.label("Does your autoexec.cfg file contain");
+                                        copy_label(&mut self.message, "net_start", ui);
+                                        ui.label("?");
+                                    });
+                                    ui.horizontal(|ui| {
+                                        ui.label("Does your TF2 launch option include");
+                                        copy_label(&mut self.message, "-usercon", ui);
+                                        ui.label("?");
+                                    });
                                 }
+                            }
+                        }
+                    }
+                }
 
+
+                match &mut self.export_steamid {
+                    Some(text) => {
+                        let mut open = true;
+                        let mut exported = false;
+                        egui::Window::new("Export SteamID")
+                        .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                        .open(&mut open)
+                        .collapsible(false)
+                        .show(ctx, |ui| {
+                            ui.vertical_centered(|ui| {
+                                ui.text_edit_singleline(text);
+                                if ui.button("Confirm").clicked() {
+                                    append_line(&text, &self.settings.steamid_list);
+                                    self.bot_checker.append_steamid(&self.steamid);
+                                    self.message = format!("Saved \"{}\" to {}", &text, &self.settings.steamid_list);
+                                    exported = true;
+                                }
                             });
                         });
+                        if !open || exported {
+                            self.export_steamid = None;
+                        }
+                    },
+                    None => {}
+                }
+
+                match &mut self.export_regex {
+                    Some(text) => {
+                        let mut open = true;
+                        let mut exported = false;
+                        egui::Window::new("Export Name/Regex")
+                        .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                        .open(&mut open)
+                        .collapsible(false)
+                        .show(ctx, |ui| {
+                            ui.vertical_centered(|ui| {
+                                ui.text_edit_singleline(text);
+                                if ui.button("Confirm").clicked() {
+
+                                    let reg = Regex::new(&text);
+                                    match reg {
+                                        Ok(reg) => {
+                                            append_line(&text, &self.settings.regex_list);
+                                            self.bot_checker.append_regex(reg);
+                                            self.message = format!("Saved \"{}\" to {}", &text, &self.settings.regex_list);
+                                            exported = true;
+                                        },
+                                        Err(e) => {
+                                            self.message = format!("Invalid Regex: {}", e);
+                                        }
+                                    }
+                                }
+                            });
+                        });
+                        if !open || exported {
+                            self.export_regex = None;
+                        }
+                    },
+                    None => {}
+                }
+                
+
+
+
+
+            });
+
+            // Export settings if they've changed
+            if settings_changed {
+                let _new_dir = std::fs::create_dir("cfg");
+                match self.settings.export("cfg/settings.json") {
+                    Ok(_) => {},
+                    Err(e) => {
+                        println!("Failed to export settings");
+                        self.message = e.to_string();
                     }
                 }
             }
+
         });
 
-            // egui::Window::new("Window").show(ctx, |ui| {
-            //     ui.label("Windows can be moved by dragging them.");
-            //     ui.label("They are automatically sized based on contents.");
-            //     ui.label("You can turn on resizing and scrolling if you like.");
-            //     ui.label("You would normally chose either panels OR windows.");
-            // });
-
-        // Export settings if they've changed
-        if settings_changed {
-            std::fs::create_dir("cfg");
-            match self.settings.export("cfg/settings.json") {
-                Ok(_) => {},
-                Err(e) => {
-                    println!("Failed to export settings");
-                    self.message = e.to_string();
-                }
-            }
-        }
-
+        ctx.gui.paint(&ctx.dis, &mut target, shapes);
+        target.finish().unwrap();
     }
+
+    fn close(&mut self) {}
+
 }
 
 // Make a selectable label which copies it's text to the clipboard on click
 fn copy_label(log: &mut String, text: &str, ui: &mut Ui) {
     let lab = ui.selectable_label(false, text);
-        if lab.clicked() {
-            let ctx: Result<ClipboardContext, Box<dyn std::error::Error>> = ClipboardProvider::new();
-            match ctx {
-                Ok(mut ctx) => {
-                    if ctx.set_contents(text.to_string()).is_ok() {
-                        log.clear();
-                        log.push_str(&format!("Copied '{}' to clipboard.", text));
-                    } else {
-                        log.clear();
-                        log.push_str("Couldn't copy text to clipboard");
-                    }
-                },
-                Err(e) => {
+    if lab.clicked() {
+        let ctx: Result<ClipboardContext, Box<dyn std::error::Error>> = ClipboardProvider::new();
+        match ctx {
+            Ok(mut ctx) => {
+                if ctx.set_contents(text.to_string()).is_ok() {
                     log.clear();
-                    log.push_str(&format!("Couldn't copy text to clipboard: {}", e));
+                    log.push_str(&format!("Copied '{}' to clipboard.", text));
+                } else {
+                    log.clear();
+                    log.push_str("Couldn't copy text to clipboard");
                 }
             }
-        }
-        lab.on_hover_text("Copy");
-}
-
-// Try to open this TF2 directory
-fn use_directory(dir: &str) -> Option<Console> {
-
-    if read_dir(format!("{}/tf/cfg", dir)).is_ok() {
-        
-        match LogWatcher::register(&format!("{}/tf/console.log", dir)) {
-            Ok(lw) => {
-                return Some(Console{
-                    log: lw,
-                    com: Commander::new(dir),
-                });
-            },
             Err(e) => {
-                println!("Failed to register log file: {}", e);
+                log.clear();
+                log.push_str(&format!("Couldn't copy text to clipboard: {}", e));
             }
         }
-
     }
-
-    None
+    lab.on_hover_text("Copy");
 }
 
 // u32 -> minutes:seconds
 fn format_time(time: u32) -> String {
-    format!("{}:{}", time/60, time%60)
+    format!("{}:{}", time / 60, time % 60)
 }
 
 const TRUNC_LEN: usize = 20;
 
-// Ui for a player
-fn render_player(ui: &mut Ui, set: &Settings, mes: &mut String, p: &mut Player, width: f32) {
 
+/// Truncates a &str
+fn truncate(s: &str, max_chars: usize) -> &str {
+    match s.char_indices().nth(max_chars) {
+        None => s,
+        Some((idx, _)) => &s[..idx],
+    }
+}
+
+pub fn append_line(data: &str, target: &str) {
+    // Add suspected bot steamid and name to file
+    let mut file = OpenOptions::new()
+        .write(true)
+        .append(true)
+        .create(true)
+        .open(target)
+        .expect(&format!(
+            "Failed to Open or Write to {}",
+            target
+        ));
+
+    if let Err(_) = write!(file, "\n{}", data) {
+        eprintln!("Failed to Open or Write to {}", target);
+    }
+}
+
+// Ui for a player
+fn render_player(ui: &mut Ui, set: &Settings, mes: &mut String, p: &mut Player, width: f32, export_steamid: &mut Option<String>, export_regex: &mut Option<String>, steamid: &mut String) {
 
     ui.horizontal(|ui| {
         ui.set_width(width);
@@ -636,15 +844,14 @@ fn render_player(ui: &mut Ui, set: &Settings, mes: &mut String, p: &mut Player, 
                 ui.horizontal(|ui| {
                     let lab = ui.selectable_label(false, RichText::new("Save SteamID").color(Color32::LIGHT_RED));
                     if lab.clicked() {
-                        p.export_steamid();
-                        *mes = format!("Saved {}'s SteamID to {}", &p.name, DEFAULT_STEAMID_LIST);
+                        *export_steamid = Some(p.get_export_steamid());
+                        *steamid = p.steamid.clone();
                     }
                     lab.on_hover_text(RichText::new("This player will always be recognized as a bot").color(Color32::RED));
     
                     let lab = ui.selectable_label(false, RichText::new("Save Name").color(Color32::LIGHT_RED));
                     if lab.clicked() {
-                        p.export_regex();
-                        *mes = format!("Saved {}'s Name to {}", &p.name, DEFAULT_REGEX_LIST);
+                        *export_regex = Some(p.get_export_regex());
                     }
                     lab.on_hover_text(RichText::new("Players with this name will always be recognized as a bot").color(Color32::RED));
                 });
@@ -667,12 +874,4 @@ fn render_player(ui: &mut Ui, set: &Settings, mes: &mut String, p: &mut Player, 
         });
 
     });
-}
-
-/// Truncates a &str
-fn truncate(s: &str, max_chars: usize) -> &str {
-    match s.char_indices().nth(max_chars) {
-        None => s,
-        Some((idx, _)) => &s[..idx],
-    }
 }
