@@ -77,7 +77,6 @@ pub fn f_status(
     // Create a new player entry
     } else {
         let name = caps[2].to_string();
-        println!("New player: {}", name);
         let mut known_steamid: bool = false;
 
         // Check if they are a bot according to the lists
@@ -188,6 +187,5 @@ pub fn f_user_disconnect(
     set: &Settings,
     bot_checker: &mut BotChecker,
 ) {
-    println!("Disconnected from server.");
     serv.clear();
 }
