@@ -317,3 +317,27 @@
 [U:1:1197906926] - irc.myg0t.gg:6667#myg0t
 [U:1:244346019] - (1)irc.myg0t.gg:6667#myg0t
 [U:1:1197788531] - irc.myg0t.gg:6667#myg0t
+
+[U:1:1132646231] - www.myg0t.win
+[U:1:891879571] - DoesHotter
+[U:1:1133040235] - www.myg0t.win
+[U:1:45132672] - DoesHotter
+[U:1:104534298] - DoesHotter
+[U:1:109919998] - (1)DoesHotter
+[U:1:120890351] - DoesHotter
+[U:1:1198449492] - www.myg0t.win
+[U:1:1241934706] - DoesHotter
+[U:1:1246438452] - cRpt
+[U:1:121313661] - www.myg0t.win
+[U:1:355716275] - www.myg0t.win
+[U:1:1271861454] - www.myg0t.win
+[U:1:1128716117] - www.myg0t.win
+[U:1:1197794850] - www.myg0t.win
+[U:1:1128738261] - www.myg0t.win
+[U:1:1118951869] - www.myg0t.win
+[U:1:1199520965] - www.myg0t.win
+[U:1:1197929520] - www.myg0t.win
+[U:1:1197814011] - www.myg0t.win
+[U:1:1197750898] - www.myg0t.win
+[U:1:1197982685] - www.myg0t.win
+[U:1:1132874970] - www.myg0t.win

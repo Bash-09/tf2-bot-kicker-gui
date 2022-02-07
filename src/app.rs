@@ -118,6 +118,7 @@ impl TF2BotKicker {
         }
     }
 
+    /// Checks if a valid rcon connection is currently established
     pub async fn rcon_connected(&mut self) -> bool {
         match &mut self.rcon {
             Ok(con) => match con.cmd("echo Ping").await {
@@ -144,12 +145,14 @@ impl TF2BotKicker {
         }
     }
 
+    /// Begins a refresh on the local server state, any players unaccounted for since the last time this function was called will be removed.
     pub async fn refresh(&mut self) {
         if !self.rcon_connected().await {
             return;
         }
         self.server.prune();
 
+        // Run status and tf_lobby_debug commands
         let status = self
             .rcon
             .as_mut()
@@ -164,6 +167,7 @@ impl TF2BotKicker {
 
         let lobby = lobby.unwrap();
 
+        // Not connected to valid server
         if lobby.contains("Failed to find lobby shared object") {
             self.server.clear();
             return;
@@ -171,6 +175,7 @@ impl TF2BotKicker {
 
         self.server.refresh();
 
+        // Parse players from tf_lobby_debug output
         for l in lobby.lines() {
             match self.regx_lobby.r.captures(l) {
                 None => {}
@@ -388,8 +393,6 @@ impl glium_app::Application for TF2BotKicker {
                     ui.spacing_mut().item_spacing.x = 0.0;
                     ui.label("powered by ");
                     ui.hyperlink_to("egui", "https://github.com/emilk/egui");
-                    ui.label(" and ");
-                    ui.hyperlink_to("eframe", "https://github.com/emilk/egui/tree/master/eframe");
                 });
 
             });
@@ -444,7 +447,7 @@ impl glium_app::Application for TF2BotKicker {
                     ui.label("");
                     ui.heading("Bot Detection Rules");
 
-                    ui.checkbox(&mut self.settings.record_steamids, &format!("Automatically record bot SteamIDs"));
+                    settings_changed |= ui.checkbox(&mut self.settings.record_steamids, &format!("Automatically record bot SteamIDs")).changed();
 
                     ui.label("");
                     ui.collapsing("Regex Lists", |ui| {
@@ -724,9 +727,11 @@ impl glium_app::Application for TF2BotKicker {
             if settings_changed {
                 let _new_dir = std::fs::create_dir("cfg");
                 match self.settings.export("cfg/settings.json") {
-                    Ok(_) => {},
+                    Ok(_) => {
+                        println!("Saved settings");
+                    },
                     Err(e) => {
-                        println!("Failed to export settings");
+                        eprintln!("Failed to export settings");
                         self.message = e.to_string();
                     }
                 }

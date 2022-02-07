@@ -103,6 +103,11 @@ impl Server {
 
     /// Print bots to console and send chat message in-game if necessary of current bots
     pub async fn announce_bots(&mut self, set: &Settings, rcon: &mut Connection<TcpStream>) {
+
+        if !set.join_alert && !set.chat_reminders {
+            return;
+        }
+
         let mut bots: Vec<String> = Vec::new();
         let mut new: bool = false;
 
@@ -175,7 +180,7 @@ impl Server {
         let mut alert: String = String::new();
 
         // Prefix message with which teams the bots are on/joining
-        if new {
+        if new && set.join_alert {
             // Set which team they're joining
             if invaders && defenders {
                 alert.push_str("BOTS joining both teams: ");
@@ -195,7 +200,7 @@ impl Server {
                     }
                 }
             }
-        } else {
+        } else if set.chat_reminders {
             // Set which team they're on
             if invaders && defenders {
                 alert.push_str("Both teams have BOTS: ");
@@ -205,13 +210,13 @@ impl Server {
                         if (p.team == Team::Invaders && invaders)
                             || (p.team == Team::Defenders && defenders)
                         {
-                            alert.push_str("Our team has BOTS: ");
+                            alert.push_str("BOTS on our team: ");
                         } else {
-                            alert.push_str("Enemy team has BOTS: ");
+                            alert.push_str("BOTS on enemy team: ");
                         }
                     }
                     None => {
-                        alert.push_str("The server has BOTS: ");
+                        alert.push_str("BOTS on this server: ");
                     }
                 }
             }
