@@ -61,10 +61,13 @@ impl TF2BotKicker {
     pub async fn new() -> TF2BotKicker {
         let settings: Settings;
 
+        let mut message = String::from("Loaded");
+
         // Attempt to load settings, create new default settings if it can't load an existing file
         let set = Settings::import("cfg/settings.json");
         if set.is_err() {
             settings = Settings::new();
+            message = format!("Error loading settings: {}", set.unwrap_err());
         } else {
             settings = set.unwrap();
         }
@@ -74,9 +77,6 @@ impl TF2BotKicker {
         let regx_lobby = LogMatcher::new(Regex::new(r_lobby).unwrap(), f_lobby);
         let regx_disconnect =
             LogMatcher::new(Regex::new(r_user_disconnect).unwrap(), f_user_disconnect);
-
-
-        let mut message = String::from("Loaded");
 
         // Create bot checker and load any bot detection rules saved
         let mut bot_checker = BotChecker::new();

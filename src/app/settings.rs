@@ -50,13 +50,45 @@ impl Settings {
     }
 
     pub fn import(file: &str) -> Result<Settings, Box<dyn std::error::Error>> {
-        return match std::fs::read_to_string(file) {
-            Ok(contents) => match serde_json::from_str::<Settings>(&contents) {
-                Ok(set) => Ok(set),
-                Err(e) => Err(Box::new(e)),
-            },
-            Err(e) => Err(Box::new(e)),
-        };
+
+        let contents = std::fs::read_to_string(file)?;
+        let json = json::parse(&contents)?;
+        
+        let mut set = Settings::new();
+
+        set.user = json["user"].as_str().unwrap_or(&set.user).to_string();
+        set.join_alert = json["join_alert"].as_bool().unwrap_or(set.join_alert);
+        set.chat_reminders = json["chat_reminders"].as_bool().unwrap_or(set.chat_reminders);
+        set.kick = json["kick"].as_bool().unwrap_or(set.kick);
+
+        set.refresh_period = json["refresh_period"].as_f32().unwrap_or(set.refresh_period);
+        set.kick_period = json["kick_period"].as_f32().unwrap_or(set.kick_period);
+        set.alert_period = json["alert_period"].as_f32().unwrap_or(set.alert_period);
+
+        set.rcon_password = json["rcon_password"].as_str().unwrap_or(&set.rcon_password).to_string();
+        set.tf2_directory = json["tf2_directory"].as_str().unwrap_or(&set.tf2_directory).to_string();
+
+        set.record_steamids = json["record_steamids"].as_bool().unwrap_or(set.record_steamids);
+
+        set.steamid_list = json["steamid_list"].as_str().unwrap_or(&set.steamid_list).to_string();
+        set.regex_list = json["regex_list"].as_str().unwrap_or(&set.regex_list).to_string();
+
+        set.steamid_lists.clear();
+        for i in json["steamid_lists"].members() {
+            if let Some(list) = i.as_str() {
+                set.steamid_lists.push(list.to_string());
+            }
+        }
+
+        set.regex_lists.clear();
+        for i in json["regex_lists"].members() {
+            if let Some(list) = i.as_str() {
+                set.regex_lists.push(list.to_string());
+            }
+        }
+
+
+        Ok(set)
     }
 
     pub fn export(&self, file: &str) -> Result<(), Box<dyn std::error::Error>> {
