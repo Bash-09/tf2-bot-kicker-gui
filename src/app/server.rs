@@ -164,6 +164,8 @@ impl Server {
             }
             self.new_bots.clear();
             new = true;
+        } else {
+            self.new_bots.clear();
         }
 
         // Announce existing bots
@@ -183,40 +185,40 @@ impl Server {
         if new && set.join_alert {
             // Set which team they're joining
             if invaders && defenders {
-                alert.push_str("BOTS joining both teams: ");
+                alert.push_str("Cheaters joining both teams: ");
             } else {
                 match self.players.get(&set.user) {
                     Some(p) => {
                         if (p.team == Team::Invaders && invaders)
                             || (p.team == Team::Defenders && defenders)
                         {
-                            alert.push_str("BOTS joining our team: ");
+                            alert.push_str("Cheaters joining our team: ");
                         } else {
-                            alert.push_str("BOTS joining enemy team: ");
+                            alert.push_str("Cheaters joining enemy team: ");
                         }
                     }
                     None => {
-                        alert.push_str("BOTS joining: ");
+                        alert.push_str("Cheaters joining: ");
                     }
                 }
             }
         } else if set.chat_reminders {
             // Set which team they're on
             if invaders && defenders {
-                alert.push_str("Both teams have BOTS: ");
+                alert.push_str("Both teams have Cheaters: ");
             } else {
                 match self.players.get(&set.user) {
                     Some(p) => {
                         if (p.team == Team::Invaders && invaders)
                             || (p.team == Team::Defenders && defenders)
                         {
-                            alert.push_str("BOTS on our team: ");
+                            alert.push_str("Cheaters on our team: ");
                         } else {
-                            alert.push_str("BOTS on enemy team: ");
+                            alert.push_str("Cheaters on enemy team: ");
                         }
                     }
                     None => {
-                        alert.push_str("BOTS on this server: ");
+                        alert.push_str("Cheaters on this server: ");
                     }
                 }
             }

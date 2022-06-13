@@ -73,6 +73,7 @@ pub fn f_status(
         p.time = time;
         p.state = state;
         p.accounted = true;
+        p.name = caps[2].to_string();
 
     // Create a new player entry
     } else {

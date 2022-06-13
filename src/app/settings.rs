@@ -49,6 +49,11 @@ impl Settings {
         }
     }
 
+    /// Attempts to import settings from a file, returning an error if there is no file or it could not be read and interpretted
+    /// 
+    /// A default settings instance is created and each setting overridden individually if it can be read from the JSON object
+    /// and ignored if not. This is to make the importer resilient to version changes such as when a new version introduces
+    /// a new setting or changes/removes and old one and the struct cannot be directly deserialised from the JSON anymore.
     pub fn import(file: &str) -> Result<Settings, Box<dyn std::error::Error>> {
 
         let contents = std::fs::read_to_string(file)?;
@@ -73,17 +78,21 @@ impl Settings {
         set.steamid_list = json["steamid_list"].as_str().unwrap_or(&set.steamid_list).to_string();
         set.regex_list = json["regex_list"].as_str().unwrap_or(&set.regex_list).to_string();
 
-        set.steamid_lists.clear();
-        for i in json["steamid_lists"].members() {
-            if let Some(list) = i.as_str() {
-                set.steamid_lists.push(list.to_string());
+        if json["steamid_lists"].is_array() {
+            set.steamid_lists.clear();
+            for i in json["steamid_lists"].members() {
+                if let Some(list) = i.as_str() {
+                    set.steamid_lists.push(list.to_string());
+                }
             }
         }
 
-        set.regex_lists.clear();
-        for i in json["regex_lists"].members() {
-            if let Some(list) = i.as_str() {
-                set.regex_lists.push(list.to_string());
+        if json["regex_lists"].is_array() {
+            set.regex_lists.clear();
+            for i in json["regex_lists"].members() {
+                if let Some(list) = i.as_str() {
+                    set.regex_lists.push(list.to_string());
+                }
             }
         }
 
@@ -91,6 +100,7 @@ impl Settings {
         Ok(set)
     }
 
+    /// Directly serializes the object to JSON and attempts to write it to the specified file.
     pub fn export(&self, file: &str) -> Result<(), Box<dyn std::error::Error>> {
         return match serde_json::to_string(self) {
             Ok(contents) => match std::fs::write(file, &contents) {

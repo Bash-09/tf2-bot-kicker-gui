@@ -5,7 +5,7 @@ use chrono::{DateTime, Local};
 use clipboard::{ClipboardContext, ClipboardProvider};
 
 pub mod timer;
-use egui::{Color32, RichText, Ui};
+use egui::{Color32, RichText, Ui, CollapsingHeader};
 use rcon::Connection;
 use regex::Regex;
 use timer::*;
@@ -819,8 +819,7 @@ fn render_player(ui: &mut Ui, set: &Settings, mes: &mut String, p: &mut Player, 
             text = egui::RichText::new(truncate(&p.name, TRUNC_LEN));
         }
 
-        ui.collapsing(text, |ui| {
-
+        CollapsingHeader::new(text).id_source(&p.userid).show(ui, |ui| {
             let prefix = match p.bot {true => "NOT ", false => ""};
             let mut text = RichText::new(&format!("Mark as {}Bot", prefix));
             if !p.bot {text = text.color(Color32::LIGHT_RED);}
@@ -831,13 +830,13 @@ fn render_player(ui: &mut Ui, set: &Settings, mes: &mut String, p: &mut Player, 
             }
 
             ui.horizontal(|ui| {
-                if ui.selectable_label(false, "Copy Name").clicked() {
+                if ui.button("Copy Name").clicked() {
                     let ctx: Result<ClipboardContext, Box<dyn std::error::Error>> = ClipboardProvider::new();
                     ctx.unwrap().set_contents(p.name.clone()).unwrap();
                     mes.clear();
                     mes.push_str(&format!("Copied \"{}\"", p.name));
                 }
-                if ui.selectable_label(false, "Copy SteamID").clicked() {
+                if ui.button("Copy SteamID").clicked() {
                     let ctx: Result<ClipboardContext, Box<dyn std::error::Error>> = ClipboardProvider::new();
                     ctx.unwrap().set_contents(p.steamid.clone()).unwrap();
                     mes.clear();
@@ -847,18 +846,18 @@ fn render_player(ui: &mut Ui, set: &Settings, mes: &mut String, p: &mut Player, 
 
             if p.bot {
                 ui.horizontal(|ui| {
-                    let lab = ui.selectable_label(false, RichText::new("Save SteamID").color(Color32::LIGHT_RED));
-                    if lab.clicked() {
+                    let but = ui.button(RichText::new("Save Name").color(Color32::LIGHT_RED));
+                    if but.clicked() {
+                        *export_regex = Some(p.get_export_regex());
+                    }
+                    but.on_hover_text(RichText::new("Players with this name will always be recognized as a bot").color(Color32::RED));
+
+                    let but = ui.button(RichText::new("Save SteamID").color(Color32::LIGHT_RED));
+                    if but.clicked() {
                         *export_steamid = Some(p.get_export_steamid());
                         *steamid = p.steamid.clone();
                     }
-                    lab.on_hover_text(RichText::new("This player will always be recognized as a bot").color(Color32::RED));
-    
-                    let lab = ui.selectable_label(false, RichText::new("Save Name").color(Color32::LIGHT_RED));
-                    if lab.clicked() {
-                        *export_regex = Some(p.get_export_regex());
-                    }
-                    lab.on_hover_text(RichText::new("Players with this name will always be recognized as a bot").color(Color32::RED));
+                    but.on_hover_text(RichText::new("This player will always be recognized as a bot").color(Color32::RED));
                 });
             }
         });
