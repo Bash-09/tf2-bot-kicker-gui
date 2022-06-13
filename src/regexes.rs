@@ -87,13 +87,13 @@ pub fn f_status(
             known_steamid = true;
 
             if !serv.players.contains_key(&steamid) {
-                println!("Known Bot joining:   {}", name);
+                log::info!("Known Bot joining:   {}", name);
             }
         } else if bot_checker.check_bot_name(&name) {
             bot = true;
 
             if !serv.players.contains_key(&steamid) {
-                println!("Unknown bot joining: {} - [{}]", name, steamid);
+                log::info!("Unknown bot joining: {} - [{}]", name, steamid);
             }
 
             bot_checker.append_steamid(&steamid);

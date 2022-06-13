@@ -47,13 +47,6 @@ impl Server {
         self.new_bots.clear();
     }
 
-    pub fn list_players(&self) {
-        println!("Listing players:");
-        for p in self.players.values() {
-            println!("Player: {}", p);
-        }
-    }
-
     pub fn get_bots(&self) -> Vec<&Player> {
         let mut bots: Vec<&Player> = Vec::new();
 
@@ -127,9 +120,6 @@ impl Server {
         let mut invaders = false;
         let mut defenders = false;
 
-        if !existing_bots.is_empty() {
-            println!("Bots on server: ");
-        }
         // Create list of existing bot names/teams on server and list bots
         for p in existing_bots.iter() {
             if p.team == Team::Defenders {
@@ -140,7 +130,6 @@ impl Server {
             }
 
             bots.push(p.name.clone());
-            println!("{}", p);
         }
 
         // Set to announce joining bots if there are any
@@ -233,7 +222,7 @@ impl Server {
 
     /// Update local info on server players
     pub fn refresh(&mut self) {
-        println!("Refreshing server.");
+        log::debug!("Refreshing server.");
 
         for p in self.players.values_mut().into_iter() {
             p.accounted = false;
@@ -245,10 +234,10 @@ impl Server {
     pub fn prune(&mut self) {
         self.players.retain(|_, v| {
             if !v.accounted && v.bot {
-                println!("Bot disconnected: {}", v.name);
+                log::info!("Bot disconnected: {}", v.name);
             }
             if !v.accounted {
-                println!("Player Pruned: {}", v.name);
+                log::debug!("Player Pruned: {}", v.name);
             }
 
             v.accounted

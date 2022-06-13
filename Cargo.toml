@@ -29,3 +29,6 @@ chrono = "0.4.19"
 rfd = "0.6.3"
 clipboard = "0.5.0"
 regex = "1.5.4"
+
+log = "*"
+env_logger = "*"

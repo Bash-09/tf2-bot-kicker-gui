@@ -12,9 +12,14 @@ use crate::{
     },
     server::Server,
     settings::Settings,
+    timer::Timer,
 };
 
 pub struct State {
+    pub refresh_timer: Timer,
+    pub alert_timer: Timer,
+    pub kick_timer: Timer,
+
     pub message: String,
 
     pub settings: Settings,
@@ -27,10 +32,6 @@ pub struct State {
     pub regx_lobby: LogMatcher,
     pub regx_disconnect: LogMatcher,
 
-    pub export_steamid: Option<String>,
-    pub steamid: String,
-    pub export_regex: Option<String>,
-
     pub bot_checker: BotChecker,
 }
 
@@ -39,12 +40,14 @@ impl State {
         let settings: Settings;
 
         let mut message = String::from("Loaded");
+        log::info!("Loaded");
 
         // Attempt to load settings, create new default settings if it can't load an existing file
         let set = Settings::import("cfg/settings.json");
         if set.is_err() {
             settings = Settings::new();
             message = format!("Error loading settings: {}", set.unwrap_err());
+            log::warn!("{}", message);
         } else {
             settings = set.unwrap();
         }
@@ -60,13 +63,19 @@ impl State {
         for uuid_list in &settings.steamid_lists {
             match bot_checker.add_steamid_list(uuid_list) {
                 Ok(_) => {}
-                Err(e) => message = format!("Error loading {}: {}", uuid_list, e),
+                Err(e) => {
+                    message = format!("Error loading {}: {}", uuid_list, e);
+                    log::error!("{}", message);
+                }
             }
         }
         for regex_list in &settings.regex_lists {
             match bot_checker.add_regex_list(regex_list) {
                 Ok(_) => {}
-                Err(e) => message = format!("Error loading {}: {}", regex_list, e),
+                Err(e) => {
+                    message = format!("Error loading {}: {}", regex_list, e);
+                    log::error!("{}", message);
+                }
             }
         }
 
@@ -78,6 +87,10 @@ impl State {
         let log = LogWatcher::use_directory(&settings.tf2_directory);
 
         State {
+            refresh_timer: Timer::new(),
+            alert_timer: Timer::new(),
+            kick_timer: Timer::new(),
+
             message,
             settings,
             rcon: rcon.unwrap(),
@@ -88,9 +101,6 @@ impl State {
             regx_lobby,
             regx_disconnect,
 
-            export_steamid: None,
-            steamid: String::new(),
-            export_regex: None,
             bot_checker,
         }
     }

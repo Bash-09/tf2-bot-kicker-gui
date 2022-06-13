@@ -23,7 +23,7 @@ impl LogWatcher {
                     return Some(lw);
                 }
                 Err(e) => {
-                    println!("Failed to register log file: {}", e);
+                    log::error!("Failed to register log file: {}", e);
                 }
             }
         }
@@ -37,10 +37,10 @@ impl LogWatcher {
                 io::ErrorKind::NotFound => {
                     // TODO: Use egui::containers::Window or something to display an error dialog box with this message
                     // Alternatively, check the TF2 launch options and, if they're good, just create the file and proceed
-                    eprintln!("\nError: console.log does not exist in the tf directory.");
-                    eprintln!("Please read the \"Settings and Configuration\" section of the README.md file.");
-                    eprintln!("You need to add \"-condebug\" to your TF2 launch options and then launch the game once before retrying.");
-                    eprintln!("You will also need to add \"-conclearlog\" and \"-usercon\" to your TF2 launch options for other functionality.\n");
+                    log::error!("\nError: console.log does not exist in the tf directory.");
+                    log::error!("Please read the \"Settings and Configuration\" section of the README.md file.");
+                    log::error!("You need to add \"-condebug\" to your TF2 launch options and then launch the game once before retrying.");
+                    log::error!("You will also need to add \"-conclearlog\" and \"-usercon\" to your TF2 launch options for other functionality.\n");
                     return Err(err);
                 }
                 _ => return Err(err),
@@ -79,7 +79,7 @@ impl LogWatcher {
 
                 // Check if file has been shortened
                 if self.reader.get_ref().metadata().unwrap().len() < self.pos {
-                    println!("Console.log file was reset");
+                    log::warn!("Console.log file was reset");
                     self.pos = self.reader.get_ref().metadata().unwrap().len();
                     self.last_activity = SystemTime::now();
                 }
@@ -111,7 +111,7 @@ impl LogWatcher {
                 return None;
             }
             Err(err) => {
-                println!("Logwatcher error: {}", err);
+                log::error!("Logwatcher error: {}", err);
             }
         }
 
