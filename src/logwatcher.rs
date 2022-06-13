@@ -41,10 +41,10 @@ impl LogWatcher {
                     eprintln!("Please read the \"Settings and Configuration\" section of the README.md file.");
                     eprintln!("You need to add \"-condebug\" to your TF2 launch options and then launch the game once before retrying.");
                     eprintln!("You will also need to add \"-conclearlog\" and \"-usercon\" to your TF2 launch options for other functionality.\n");
-                    return Err(err)
-                },
-                _ => return Err(err)
-            }
+                    return Err(err);
+                }
+                _ => return Err(err),
+            },
         };
 
         let metadata = match f.metadata() {

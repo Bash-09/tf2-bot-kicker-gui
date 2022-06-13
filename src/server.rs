@@ -21,7 +21,6 @@ pub struct Server {
 
 impl Server {
     pub fn new() -> Server {
-
         // let mut players = HashMap::with_capacity(24);
         // players.insert(String::from("U:1:1234567"), Player {
         //     userid: String::from("0"),
@@ -34,7 +33,7 @@ impl Server {
         //     bot: false,
         //     accounted: true,
         //     new_connection: false,
-        // }); 
+        // });
 
         Server {
             // players,
@@ -103,7 +102,6 @@ impl Server {
 
     /// Print bots to console and send chat message in-game if necessary of current bots
     pub async fn announce_bots(&mut self, set: &Settings, rcon: &mut Connection<TcpStream>) {
-
         if !set.join_alert && !set.chat_reminders {
             return;
         }

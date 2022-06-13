@@ -11,9 +11,7 @@ Wait to load before trying to kick
     Check player's connection time
 
 Refactor stuff for popup windows
-    Create popup window trait
     Create regex/steamid recording window
-    Add dyn popup windows to list and draw dynamically
 
     Add popup window if no console.log file was found
 

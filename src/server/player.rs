@@ -64,7 +64,6 @@ impl std::fmt::Display for Player {
 }
 
 impl Player {
-
     pub fn get_export_steamid(&self) -> String {
         format!("[{}] - {}", &self.steamid, &self.name)
     }
@@ -72,5 +71,4 @@ impl Player {
     pub fn get_export_regex(&self) -> String {
         regex::escape(&self.name)
     }
-
 }

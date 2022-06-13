@@ -1,7 +1,7 @@
 #![allow(non_upper_case_globals)]
 #![allow(unused_variables)]
 
-use crate::{server::*, app::append_line};
+use crate::{append_line, server::*};
 
 use regex::{Captures, Regex};
 
