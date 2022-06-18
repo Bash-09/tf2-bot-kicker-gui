@@ -5,10 +5,11 @@ use regex::Regex;
 use tokio::runtime::Runtime;
 
 use crate::{
-    bot_checker::BotChecker,
     logwatcher::LogWatcher,
+    player_checker::PlayerChecker,
     regexes::{
-        f_lobby, f_status, f_user_disconnect, r_lobby, r_status, r_user_disconnect, LogMatcher,
+        fn_lobby, fn_status, fn_user_disconnect, LogMatcher, REGEX_LOBBY, REGEX_STATUS,
+        REGEX_USER_DISCONNECTED,
     },
     server::Server,
     settings::Settings,
@@ -32,7 +33,7 @@ pub struct State {
     pub regx_lobby: LogMatcher,
     pub regx_disconnect: LogMatcher,
 
-    pub bot_checker: BotChecker,
+    pub player_checker: PlayerChecker,
 }
 
 impl State {
@@ -53,24 +54,25 @@ impl State {
         }
 
         // Load regexes
-        let regx_status = LogMatcher::new(Regex::new(r_status).unwrap(), f_status);
-        let regx_lobby = LogMatcher::new(Regex::new(r_lobby).unwrap(), f_lobby);
-        let regx_disconnect =
-            LogMatcher::new(Regex::new(r_user_disconnect).unwrap(), f_user_disconnect);
+        let regx_status = LogMatcher::new(Regex::new(REGEX_STATUS).unwrap(), fn_status);
+        let regx_lobby = LogMatcher::new(Regex::new(REGEX_LOBBY).unwrap(), fn_lobby);
+        let regx_disconnect = LogMatcher::new(
+            Regex::new(REGEX_USER_DISCONNECTED).unwrap(),
+            fn_user_disconnect,
+        );
 
-        // Create bot checker and load any bot detection rules saved
-        let mut bot_checker = BotChecker::new();
-        for uuid_list in &settings.steamid_lists {
-            match bot_checker.add_steamid_list(uuid_list) {
-                Ok(_) => {}
-                Err(e) => {
-                    message = format!("Error loading {}: {}", uuid_list, e);
-                    log::error!("{}", message);
-                }
+        // Create player checker and load any regexes and players saved
+        let mut player_checker = PlayerChecker::new();
+        match player_checker.read_players("cfg/players.json") {
+            Ok(()) => {
+                log::info!("Loaded playerlist");
+            },
+            Err(e) => {
+                log::error!("Failed to read playlist: {:?}", e);
             }
         }
         for regex_list in &settings.regex_lists {
-            match bot_checker.add_regex_list(regex_list) {
+            match player_checker.read_regex_list(regex_list) {
                 Ok(_) => {}
                 Err(e) => {
                     message = format!("Error loading {}: {}", regex_list, e);
@@ -101,7 +103,7 @@ impl State {
             regx_lobby,
             regx_disconnect,
 
-            bot_checker,
+            player_checker,
         }
     }
 
@@ -167,10 +169,14 @@ impl State {
                         l,
                         c,
                         &self.settings,
-                        &mut self.bot_checker,
+                        &mut self.player_checker,
                     );
                 }
             }
         }
+    }
+
+    pub fn kick_player(&self) {
+        
     }
 }

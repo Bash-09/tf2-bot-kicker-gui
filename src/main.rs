@@ -4,32 +4,26 @@ extern crate env_logger;
 extern crate rfd;
 extern crate serde;
 
-use std::{fs::OpenOptions, io::Write, time::SystemTime};
-
-use chrono::{DateTime, Local};
-
+pub mod settings;
+pub mod server;
 pub mod timer;
+pub mod gui;
+pub mod player_checker;
+pub mod logwatcher;
+pub mod state;
+pub mod command_manager;
+
+use std::{fs::OpenOptions, io::Write, time::SystemTime};
+use chrono::{DateTime, Local};
 use egui_winit::winit::{dpi::PhysicalSize, window::WindowBuilder};
 use glium_app::{
     context::Context, run, utils::persistent_window::PersistentWindowManager, Application,
 };
 use state::State;
-
-pub mod settings;
-
-pub mod server;
 use server::*;
-
-pub mod gui;
-
 use tokio::runtime::Runtime;
-
 mod regexes;
 
-pub mod bot_checker;
-
-pub mod logwatcher;
-pub mod state;
 
 fn main() {
     env_logger::init();
@@ -96,7 +90,7 @@ impl Application for TF2BotKicker {
                 let system_time = SystemTime::now();
                 let datetime: DateTime<Local> = system_time.into();
                 state.message = format!("Refreshed ({})", datetime.format("%T"));
-                log::info!("{}", state.message);
+                log::debug!("{}", state.message);
             }
         });
 
@@ -111,7 +105,7 @@ impl Application for TF2BotKicker {
                                 &line,
                                 c,
                                 &state.settings,
-                                &mut state.bot_checker,
+                                &mut state.player_checker,
                             );
                             continue;
                         }
@@ -122,7 +116,7 @@ impl Application for TF2BotKicker {
                                 &line,
                                 c,
                                 &state.settings,
-                                &mut state.bot_checker,
+                                &mut state.player_checker,
                             );
                             continue;
                         }
@@ -146,14 +140,14 @@ impl Application for TF2BotKicker {
             }
 
             // Send chat alerts
-            if state.alert_timer.update() {
-                if state.rcon_connected().await {
-                    state
-                        .server
-                        .announce_bots(&state.settings, state.rcon.as_mut().unwrap())
-                        .await;
-                }
-            }
+            // if state.alert_timer.update() {
+            //     if state.rcon_connected().await {
+            //         state
+            //             .server
+            //             .announce_bots(&state.settings, state.rcon.as_mut().unwrap())
+            //             .await;
+            //     }
+            // }
         });
 
         let mut target = ctx.dis.draw();
@@ -167,7 +161,9 @@ impl Application for TF2BotKicker {
         target.finish().unwrap();
     }
 
-    fn close(&mut self) {}
+    fn close(&mut self) {
+        self.state.player_checker.save_players("cfg/players.json").expect("Failed to save players :(");
+    }
 
     fn handle_event(&mut self, _: &mut Context, _: &egui_winit::winit::event::Event<()>) {}
 }

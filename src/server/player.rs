@@ -1,10 +1,33 @@
 use core::fmt;
 
+use egui::{Color32, Ui};
+use serde::Serialize;
+
+use crate::player_checker::PlayerRecord;
+
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum Team {
     Defenders,
     Invaders,
     None,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize)]
+pub enum PlayerType {
+    Player,
+    Bot,
+    Cheater,
+}
+
+impl PlayerType {
+    pub fn color(&self, ui: &Ui) -> Color32 {
+        use PlayerType::*;
+        match self {
+            Player => ui.visuals().text_color(),
+            Bot => Color32::RED,
+            Cheater => Color32::from_rgb(255, 165, 0),
+        }
+    }
 }
 
 impl std::fmt::Display for Team {
@@ -20,17 +43,17 @@ impl std::fmt::Display for Team {
 }
 
 #[derive(PartialEq, Eq)]
-pub enum State {
+pub enum PlayerState {
     Spawning,
     Active,
 }
 
-impl std::fmt::Display for State {
+impl std::fmt::Display for PlayerState {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let out: &str;
         match self {
-            State::Active => out = "Active  ",
-            State::Spawning => out = "Spawning",
+            PlayerState::Active => out = "Active  ",
+            PlayerState::Spawning => out = "Spawning",
         }
         write!(f, "{}", out)
     }
@@ -40,25 +63,23 @@ pub struct Player {
     pub userid: String,
     pub name: String,
     pub steamid: String,
-    pub known_steamid: bool,
     pub time: u32,
     pub team: Team,
-    pub state: State,
-    pub bot: bool,
+    pub state: PlayerState,
+    pub player_type: PlayerType,
+    pub notes: Option<String>,
+
     pub accounted: bool,
     pub new_connection: bool,
+    pub stolen_name: bool,
 }
 
 impl std::fmt::Display for Player {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut bot = "No";
-        if self.bot {
-            bot = "Yes";
-        }
         write!(
             f,
-            "{} - {}, \tUID: {}, SteamID: {}, State: {}, Bot: {}",
-            self.team, self.name, self.userid, self.steamid, self.state, bot
+            "{} - {}, \tUID: {}, SteamID: {}, State: {}, Type: {:?}",
+            self.team, self.name, self.userid, self.steamid, self.state, self.player_type
         )
     }
 }
@@ -70,5 +91,13 @@ impl Player {
 
     pub fn get_export_regex(&self) -> String {
         regex::escape(&self.name)
+    }
+
+    pub fn get_record(&self) -> PlayerRecord {
+        PlayerRecord {
+            steamid: self.steamid.clone(),
+            player_type: self.player_type,
+            notes: self.notes.clone(),
+        }
     }
 }

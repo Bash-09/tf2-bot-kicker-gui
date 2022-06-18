@@ -4,10 +4,12 @@ use std::collections::HashMap;
 
 pub mod player;
 use player::Player;
-use player::State;
+use player::PlayerState;
 use player::Team;
 use rcon::Connection;
 use tokio::net::TcpStream;
+
+use self::player::PlayerType;
 
 use super::settings::Settings;
 
@@ -21,22 +23,7 @@ pub struct Server {
 
 impl Server {
     pub fn new() -> Server {
-        // let mut players = HashMap::with_capacity(24);
-        // players.insert(String::from("U:1:1234567"), Player {
-        //     userid: String::from("0"),
-        //     name: String::from("Debug User"),
-        //     steamid: String::from("U:1:1234567"),
-        //     known_steamid: true,
-        //     time: 0,
-        //     team: Team::Invaders,
-        //     state: State::Active,
-        //     bot: false,
-        //     accounted: true,
-        //     new_connection: false,
-        // });
-
         Server {
-            // players,
             players: HashMap::with_capacity(24),
             new_bots: Vec::new(),
         }
@@ -51,7 +38,7 @@ impl Server {
         let mut bots: Vec<&Player> = Vec::new();
 
         for p in self.players.values().into_iter() {
-            if p.bot {
+            if p.player_type == PlayerType::Bot {
                 bots.push(p);
             }
         }
@@ -70,13 +57,13 @@ impl Server {
         let mut bots: Vec<&Player> = Vec::new();
 
         for p in self.players.values().into_iter() {
-            if p.bot {
+            if p.player_type == PlayerType::Bot {
                 bots.push(p);
             }
         }
         bots = bots
             .into_iter()
-            .filter(|p| p.state == State::Active && p.accounted)
+            .filter(|p| p.state == PlayerState::Active && p.accounted)
             .collect();
 
         for p in bots {
@@ -93,132 +80,205 @@ impl Server {
         }
     }
 
-    /// Print bots to console and send chat message in-game if necessary of current bots
-    pub async fn announce_bots(&mut self, set: &Settings, rcon: &mut Connection<TcpStream>) {
-        if !set.join_alert && !set.chat_reminders {
-            return;
-        }
+    // /// Print bots to console and send chat message in-game if necessary of current bots
+    // pub async fn announce_bots(&mut self, set: &Settings, rcon: &mut Connection<TcpStream>) {
+    //     if !set.join_alert && !set.chat_reminders {
+    //         return;
+    //     }
 
-        let mut bots: Vec<String> = Vec::new();
-        let mut new: bool = false;
+    //     let mut bots: Vec<String> = Vec::new();
+    //     let mut new: bool = false;
 
-        // Collect all bots in list bots
-        let mut existing_bots: Vec<&Player> = Vec::new();
-        for p in self.players.values().into_iter() {
-            if p.bot {
-                existing_bots.push(p);
-            }
-        }
+    //     // Collect all bots in list bots
+    //     let mut existing_bots: Vec<&Player> = Vec::new();
+    //     for p in self.players.values().into_iter() {
+    //         if p.playerType == PlayerType::Bot {
+    //             existing_bots.push(p);
+    //         }
+    //     }
 
-        // Remove not-yet-active or unaccounted bots
-        existing_bots = existing_bots
-            .into_iter()
-            .filter(|p| p.state == State::Active && p.accounted)
-            .collect();
+    //     // Remove not-yet-active or unaccounted bots
+    //     existing_bots = existing_bots
+    //         .into_iter()
+    //         .filter(|p| p.state == PlayState::Active && p.accounted)
+    //         .collect();
 
-        //Check for teams
-        let mut invaders = false;
-        let mut defenders = false;
+    //     //Check for teams
+    //     let mut invaders = false;
+    //     let mut defenders = false;
 
-        // Create list of existing bot names/teams on server and list bots
-        for p in existing_bots.iter() {
-            if p.team == Team::Defenders {
-                defenders = true;
-            }
-            if p.team == Team::Invaders {
-                invaders = true;
-            }
+    //     // Create list of existing bot names/teams on server and list bots
+    //     for p in existing_bots.iter() {
+    //         if p.team == Team::Defenders {
+    //             defenders = true;
+    //         }
+    //         if p.team == Team::Invaders {
+    //             invaders = true;
+    //         }
 
-            bots.push(p.name.clone());
-        }
+    //         bots.push(p.name.clone());
+    //     }
 
-        // Set to announce joining bots if there are any
-        if !self.new_bots.is_empty() && set.join_alert {
-            bots.clear();
+    //     // Set to announce joining bots if there are any
+    //     if !self.new_bots.is_empty() && set.join_alert {
+    //         bots.clear();
 
-            invaders = false;
-            defenders = false;
+    //         invaders = false;
+    //         defenders = false;
 
-            for p in self.new_bots.iter() {
-                if p.1 == Team::Defenders {
-                    defenders = true;
-                }
-                if p.1 == Team::Invaders {
-                    invaders = true;
-                }
+    //         for p in self.new_bots.iter() {
+    //             if p.1 == Team::Defenders {
+    //                 defenders = true;
+    //             }
+    //             if p.1 == Team::Invaders {
+    //                 invaders = true;
+    //             }
 
-                bots.push(p.0.clone());
-            }
-            self.new_bots.clear();
-            new = true;
-        } else {
-            self.new_bots.clear();
-        }
+    //             bots.push(p.0.clone());
+    //         }
+    //         self.new_bots.clear();
+    //         new = true;
+    //     } else {
+    //         self.new_bots.clear();
+    //     }
 
-        // Announce existing bots
-        if bots.is_empty() {
-            return;
-        }
+    //     // Announce existing bots
+    //     if bots.is_empty() {
+    //         return;
+    //     }
 
-        // Don't bother if there's nothing to announce
-        if !(set.chat_reminders || new) {
-            return;
-        }
+    //     // Don't bother if there's nothing to announce
+    //     if !(set.chat_reminders || new) {
+    //         return;
+    //     }
 
-        // Construct alert message
-        let mut alert: String = String::new();
+    //     // Construct alert message
+    //     let mut alert: String = String::new();
 
-        // Prefix message with which teams the bots are on/joining
-        if new && set.join_alert {
-            // Set which team they're joining
-            if invaders && defenders {
-                alert.push_str("Cheaters joining both teams: ");
-            } else {
-                match self.players.get(&set.user) {
-                    Some(p) => {
-                        if (p.team == Team::Invaders && invaders)
-                            || (p.team == Team::Defenders && defenders)
-                        {
-                            alert.push_str("Cheaters joining our team: ");
-                        } else {
-                            alert.push_str("Cheaters joining enemy team: ");
-                        }
-                    }
-                    None => {
-                        alert.push_str("Cheaters joining: ");
-                    }
-                }
-            }
-        } else if set.chat_reminders {
-            // Set which team they're on
-            if invaders && defenders {
-                alert.push_str("Both teams have Cheaters: ");
-            } else {
-                match self.players.get(&set.user) {
-                    Some(p) => {
-                        if (p.team == Team::Invaders && invaders)
-                            || (p.team == Team::Defenders && defenders)
-                        {
-                            alert.push_str("Cheaters on our team: ");
-                        } else {
-                            alert.push_str("Cheaters on enemy team: ");
-                        }
-                    }
-                    None => {
-                        alert.push_str("Cheaters on this server: ");
-                    }
-                }
-            }
-        }
+    //     // Prefix message with which teams the bots are on/joining
+    //     if new && set.join_alert {
+    //         // Set which team they're joining
+    //         if invaders && defenders {
+    //             alert.push_str("Cheaters joining both teams: ");
+    //         } else {
+    //             match self.players.get(&set.user) {
+    //                 Some(p) => {
+    //                     if (p.team == Team::Invaders && invaders)
+    //                         || (p.team == Team::Defenders && defenders)
+    //                     {
+    //                         alert.push_str("Cheaters joining our team: ");
+    //                     } else {
+    //                         alert.push_str("Cheaters joining enemy team: ");
+    //         bots to console and send chat message in-game if necessary of current bots
+    // pub async fn announce_bots(&mut self, set: &Settings, rcon: &mut Connection<TcpStream>) {
+    //     if !set.join_alert && !set.chat_reminders {
+    //         return;
+    //     }
 
-        // List bots
-        for p in bots {
-            alert.push_str(&format!("{} ", p));
-        }
+    //     let mut bots: Vec<String> = Vec::new();
+    //     let mut new: bool = false;
 
-        // Broadcast message
-        let _cmd = rcon.cmd(&format!("say \"{}\"", alert)).await;
-    }
+    //     // Collect all bots in list bots
+    //     let mut existing_bots: Vec<&Player> = Vec::new();
+    //     for p in self.players.values().into_iter() {
+    //         if p.playerType == PlayerType::Bot {
+    //             existing_bots.push(p);
+    //         }
+    //     }
+
+    //     // Remove not-yet-active or unaccounted bots
+    //     existing_bots = existing_bots
+    //         .into_iter()
+    //         .filter(|p| p.state == PlayState::Active && p.accounted)
+    //         .collect();
+
+    //     //Check for teams
+    //     let mut invaders = false;
+    //     let mut defenders = false;
+
+    //     // Create list of existing bot names/teams on server and list bots
+    //     for p in existing_bots.iter() {
+    //         if p.team == Team::Defenders {
+    //             defenders = true;
+    //         }
+    //         if p.team == Team::Invaders {
+    //             invaders = true;
+    //         }
+
+    //         bots.push(p.name.clone());
+    //     }
+
+    //     // Set to announce joining bots if there are any
+    //     if !self.new_bots.is_empty() && set.join_alert {
+    //         bots.clear();
+
+    //         invaders = false;
+    //         defenders = false;
+
+    //         for p in self.new_bots.iter() {
+    //             if p.1 == Team::Defenders {
+    //                 defenders = true;
+    //             }
+    //             if p.1 == Team::Invaders {
+    //                 invaders = true;
+    //             }
+
+    //             bots.push(p.0.clone());
+    //         }
+    //         self.new_bots.clear();
+    //         new = true;
+    //     } else {
+    //         self.new_bots.clear();
+    //     }
+
+    //     // Announce existing bots
+    //     if bots.is_empty() {
+    //         return;
+    //     }
+
+    //     // Don't bother if there's nothing to announce
+    //     if !(set.chat_reminders || new) {
+    //         return;
+    //     }
+
+    //     // Construct alert message
+    //     let mut alert: String = String::new();
+
+    //     // Prefix message with which teams the bots are on/joining
+    //     if new && set.join_alert {
+    //         // Set which team they're joining
+    //         if invaders && defenders {
+    //             alert.push_str("Cheaters joining both teams: ");
+    //         } else {
+    //        // Set which team they're on
+    //         if invaders && defenders {
+    //             alert.push_str("Both teams have Cheaters: ");
+    //         } else {
+    //             match self.players.get(&set.user) {
+    //                 Some(p) => {
+    //                     if (p.team == Team::Invaders && invaders)
+    //                         || (p.team == Team::Defenders && defenders)
+    //                     {
+    //                         alert.push_str("Cheaters on our team: ");
+    //                     } else {
+    //                         alert.push_str("Cheaters on enemy team: ");
+    //                     }
+    //                 }
+    //                 None => {
+    //                     alert.push_str("Cheaters on this server: ");
+    //                 }
+    //             }
+    //         }
+    //     }
+
+    //     // List bots
+    //     for p in bots {
+    //         alert.push_str(&format!("{} ", p));
+    //     }
+
+    //     // Broadcast message
+    //     let _cmd = rcon.cmd(&format!("say \"{}\"", alert)).await;
+    // }
 
     /// Update local info on server players
     pub fn refresh(&mut self) {
@@ -233,7 +293,7 @@ impl Server {
     /// (This method will be called automatically in a rexes command)
     pub fn prune(&mut self) {
         self.players.retain(|_, v| {
-            if !v.accounted && v.bot {
+            if !v.accounted && v.player_type == PlayerType::Bot {
                 log::info!("Bot disconnected: {}", v.name);
             }
             if !v.accounted {

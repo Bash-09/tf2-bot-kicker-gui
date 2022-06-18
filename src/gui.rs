@@ -1,14 +1,14 @@
 use std::ops::RangeInclusive;
 
 use clipboard::{ClipboardContext, ClipboardProvider};
-use egui::{CollapsingHeader, Color32, Context, Id, RichText, Ui};
+use egui::{CollapsingHeader, Color32, ComboBox, Context, Id, Label, RichText, Ui};
 use glium_app::utils::persistent_window::{PersistentWindow, PersistentWindowManager};
 use regex::Regex;
 
 use crate::{
     append_line,
     logwatcher::LogWatcher,
-    server::player::{self, Team},
+    server::player::{Player, PlayerState, PlayerType, Team},
     state::State,
 };
 
@@ -53,7 +53,7 @@ pub fn render(gui_ctx: &Context, windows: &mut PersistentWindowManager<State>, s
                                     dir = pb.to_string_lossy().to_string();
                                 }
                             }
-                            match state.bot_checker.add_regex_list(&dir) {
+                            match state.player_checker.read_regex_list(&dir) {
                                 Ok(_) => {
                                     state.message = format!(
                                         "Added {} as a regex list",
@@ -73,7 +73,15 @@ pub fn render(gui_ctx: &Context, windows: &mut PersistentWindowManager<State>, s
                     }
                 }
 
-                if ui.button("Add SteamID List").clicked() {
+                let mut import_list: Option<PlayerType> = None;
+                if ui.button("Import SteamIDs as Bots").clicked() {
+                    import_list = Some(PlayerType::Bot);
+                }
+                if ui.button("Import SteamIDs as Cheaters").clicked() {
+                    import_list = Some(PlayerType::Cheater);
+                }
+
+                if let Some(player_type) = import_list {
                     match rfd::FileDialog::new().set_directory("cfg").pick_file() {
                         Some(pb) => {
                             let dir;
@@ -85,7 +93,8 @@ pub fn render(gui_ctx: &Context, windows: &mut PersistentWindowManager<State>, s
                                     dir = pb.to_string_lossy().to_string();
                                 }
                             }
-                            match state.bot_checker.add_steamid_list(&dir) {
+
+                            match state.player_checker.read_from_steamid_list(&dir, player_type) {
                                 Ok(_) => {
                                     state.message = format!(
                                         "Added {} as a steamid list",
@@ -394,7 +403,7 @@ fn copy_label(log: &mut String, text: &str, ui: &mut Ui) {
 
 // u32 -> minutes:seconds
 fn format_time(time: u32) -> String {
-    format!("{}:{}", time / 60, time % 60)
+    format!("{:2}:{:02}", time / 60, time % 60)
 }
 
 const TRUNC_LEN: usize = 20;
@@ -442,7 +451,14 @@ fn render_players(ui: &mut Ui, state: &mut State, windows: &mut PersistentWindow
                 });
             });
 
-            for (_, player) in &mut state.server.players {
+            // Render players
+            let mut playerlist: Vec<&mut Player> = state.server.players.values_mut().collect();
+            playerlist.sort_by(|a, b| {
+                b.time.cmp(&a.time)
+            });
+
+            for player in playerlist {
+                let saved = state.player_checker.players.contains_key(&player.steamid);
 
                 let team_ui = match player.team {
                     Team::Invaders => &mut cols[0],
@@ -456,86 +472,116 @@ fn render_players(ui: &mut Ui, state: &mut State, windows: &mut PersistentWindow
                     let text;
                     if player.steamid == state.settings.user {
                         text = egui::RichText::new(truncate(&player.name, TRUNC_LEN)).color(Color32::GREEN);
-                    } else if player.bot {
-                        text = egui::RichText::new(truncate(&player.name, TRUNC_LEN)).color(Color32::RED);
+                    } else if player.player_type == PlayerType::Bot || player.player_type == PlayerType::Cheater {
+                        text = egui::RichText::new(truncate(&player.name, TRUNC_LEN)).color(player.player_type.color(ui));
+                    } else if player.stolen_name {
+                        text = egui::RichText::new(truncate(&player.name, TRUNC_LEN)).color(Color32::YELLOW);
                     } else {
                         text = egui::RichText::new(truncate(&player.name, TRUNC_LEN));
                     }
 
-                    CollapsingHeader::new(text)
-                        .id_source(&player.userid)
-                        .show(ui, |ui| {
-                            let prefix = match player.bot {
-                                true => "NOT ",
-                                false => "",
-                            };
-                            let mut text = RichText::new(&format!("Mark as {}Bot", prefix));
-                            if !player.bot {
-                                text = text.color(Color32::LIGHT_RED);
-                            } else {
-                                text = text.color(Color32::LIGHT_GREEN);
-                            }
+                    let header = CollapsingHeader::new(text)
+                    .id_source(&player.userid)
+                    .show(ui, |ui| {
 
-                            if ui.selectable_label(false, text).clicked() {
-                                player.bot = !player.bot;
-                            }
-
-                            ui.horizontal(|ui| {
-                                if ui.button("Copy Name").clicked() {
-                                    let ctx: Result<ClipboardContext, Box<dyn std::error::Error>> =
-                                        ClipboardProvider::new();
-                                    ctx.unwrap().set_contents(player.name.clone()).unwrap();
-                                    state.message.clear();
-                                    state.message.push_str(&format!("Copied \"{}\"", player.name));
-                                    log::info!("{}", state.message);
-                                }
-                                if ui.button("Copy SteamID").clicked() {
-                                    let ctx: Result<ClipboardContext, Box<dyn std::error::Error>> =
-                                        ClipboardProvider::new();
-                                    ctx.unwrap().set_contents(player.steamid.clone()).unwrap();
-                                    state.message.clear();
-                                    state.message.push_str(&format!("Copied \"{}\"", player.steamid));
-                                    log::info!("{}", state.message);
-                                }
+                        // Player Type combobox
+                        ui.horizontal(|ui| {
+                            ui.label("Player Type");
+                            let mut changed = false;
+                            ComboBox::from_id_source(&player.steamid)
+                            .selected_text(RichText::new(format!("{:?}", player.player_type)).color(player.player_type.color(ui)))
+                            .show_ui(ui, |ui| {
+                                changed |= ui.selectable_value(&mut player.player_type, PlayerType::Player, "Player").clicked();
+                                changed |= ui.selectable_value(&mut player.player_type, PlayerType::Bot, RichText::new("Bot").color(PlayerType::Bot.color(ui))).clicked();
+                                changed |= ui.selectable_value(&mut player.player_type, PlayerType::Cheater, RichText::new("Cheater").color(PlayerType::Cheater.color(ui))).clicked();
                             });
 
-                            if player.bot {
-                                ui.horizontal(|ui| {
-                                    let but = ui.button(RichText::new("Save Name").color(Color32::LIGHT_RED));
-                                    if but.clicked() {
-                                        windows.push(create_export_regex_window(player.get_export_regex()));
-                                    }
-                                    but.on_hover_text(
-                                        RichText::new(
-                                            "Players with this name will always be recognized as a bot",
-                                        )
-                                        .color(Color32::RED),
-                                    );
-
-                                    let but =
-                                        ui.button(RichText::new("Save SteamID").color(Color32::LIGHT_RED));
-                                    if but.clicked() {
-                                        windows.push(create_export_steamid_window(player.get_export_steamid()));
-                                    }
-                                    but.on_hover_text(
-                                        RichText::new("This player will always be recognized as a bot")
-                                            .color(Color32::RED),
-                                    );
-                                });
+                            if changed && saved {
+                                state.player_checker.update_player(player);
                             }
                         });
 
+                        // Copy SteamID and Name buttons
+                        ui.horizontal(|ui| {
+                            if ui.button("Copy SteamID").clicked() {
+                                let ctx: Result<ClipboardContext, Box<dyn std::error::Error>> =
+                                    ClipboardProvider::new();
+                                ctx.unwrap().set_contents(player.steamid.clone()).unwrap();
+                                state.message.clear();
+                                state.message.push_str(&format!("Copied \"{}\"", player.steamid));
+                                log::info!("{}", state.message);
+                            }
+                            if ui.button("Copy Name").clicked() {
+                                let ctx: Result<ClipboardContext, Box<dyn std::error::Error>> =
+                                    ClipboardProvider::new();
+                                ctx.unwrap().set_contents(player.name.clone()).unwrap();
+                                state.message.clear();
+                                state.message.push_str(&format!("Copied \"{}\"", player.name));
+                                log::info!("{}", state.message);
+                            }
+                        });
+
+                        // Save and Delete buttons
+                        if !saved {
+                            let but = ui.button("Save Player")
+                                .on_hover_text("This player's information will be saved in case you see them again.");
+                            if but.clicked() {
+                                state.player_checker.update_player(player);
+                            }
+                        } else {
+                            let but = ui.button("Delete Player")
+                                .on_hover_text("This player will not be recognised next time you see them.");
+                            if but.clicked() {
+                                state.player_checker.remove_player(player);
+                            }
+                        }
+
+                        // Save Name button
+                        if player.player_type == PlayerType::Bot || player.player_type == PlayerType::Cheater {
+                            let but = ui.button(RichText::new("Save Name").color(Color32::RED));
+                            if but.clicked() {
+                                windows.push(create_export_regex_window(player.get_export_regex()));
+                            }
+                            but.on_hover_text(
+                                RichText::new(
+                                    "Players with this name will always be recognized as a bot",
+                                )
+                                .color(Color32::RED),
+                            );
+                        }
+
+                        // Call votekick button
+                        if ui.button(RichText::new("Call votekick").color(Color32::RED)).clicked() {
+                            log::error!("Not implemented yet");
+                        }
+                    });
+
+                    // Notes / Stolen name warning
+                    if player.stolen_name || player.notes.is_some() {
+                        header.header_response.on_hover_ui(|ui| {
+                            if player.stolen_name {
+                                ui.label(RichText::new("A player with this name is already on the server.").color(Color32::YELLOW));
+                            }
+                            if let Some(notes) = &player.notes {
+                                ui.label(notes);
+                            }
+                        });
+                    }
+
+                    // Cheater, Bot and Joining labels
                     ui.with_layout(egui::Layout::right_to_left(), |ui| {
                         ui.horizontal(|ui| {
-                            ui.label("   ");
+                            ui.add_space(15.0);
                             ui.label(&format_time(player.time));
 
-                            if player.bot {
-                                ui.colored_label(Color32::RED, "BOT");
+                            if player.player_type == PlayerType::Cheater {
+                                ui.add(Label::new(RichText::new("Cheater").color(PlayerType::Cheater.color(ui))));
                             }
-
-                            if player.state == player::State::Spawning {
-                                ui.colored_label(Color32::YELLOW, "Joining");
+                            if player.player_type == PlayerType::Bot {
+                                ui.add(Label::new(RichText::new("Bot").color(PlayerType::Bot.color(ui))));
+                            }
+                            if player.state == PlayerState::Spawning {
+                                ui.add(Label::new(RichText::new("Joining").color(Color32::YELLOW)));
                             }
                         });
                     });
@@ -544,34 +590,6 @@ fn render_players(ui: &mut Ui, state: &mut State, windows: &mut PersistentWindow
 
         });
     });
-}
-
-fn create_export_steamid_window(mut steamid: String) -> PersistentWindow<State> {
-    PersistentWindow::new(Box::new(move |id, gui_ctx, state| {
-        let mut open = true;
-        let mut exported = false;
-
-        egui::Window::new("Export SteamID")
-            .id(Id::new(id))
-            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-            .open(&mut open)
-            .collapsible(false)
-            .show(gui_ctx, |ui| {
-                ui.vertical_centered(|ui| {
-                    ui.text_edit_singleline(&mut steamid);
-                    if ui.button("Confirm").clicked() {
-                        append_line(&steamid, &state.settings.steamid_list);
-                        state.bot_checker.append_steamid(&steamid);
-                        state.message =
-                            format!("Saved \"{}\" to {}", &steamid, &state.settings.steamid_list);
-                        log::info!("{}", state.message);
-                        exported = true;
-                    }
-                });
-            });
-
-        open & !exported
-    }))
 }
 
 fn create_export_regex_window(mut regex: String) -> PersistentWindow<State> {
@@ -592,7 +610,7 @@ fn create_export_regex_window(mut regex: String) -> PersistentWindow<State> {
                         match reg {
                             Ok(reg) => {
                                 append_line(&regex, &state.settings.regex_list);
-                                state.bot_checker.append_regex(reg);
+                                state.player_checker.append_regex(reg);
                                 state.message = format!(
                                     "Saved \"{}\" to {}",
                                     &regex, &state.settings.regex_list
