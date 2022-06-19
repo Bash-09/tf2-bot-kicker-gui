@@ -81,10 +81,6 @@ pub fn fn_status(
         stolen_name |= name == p.name;
     }
 
-    if stolen_name && settings.announce_namesteal {
-        todo!("Announce name-stealing");
-    }
-
     // Update an existing player
     if let Some(p) = server.players.get_mut(&steamid) {
         p.time = time;
@@ -92,18 +88,27 @@ pub fn fn_status(
         p.accounted = true;
         p.stolen_name = stolen_name;
 
-        if p.stolen_name {
+        if p.name != name {
             player_checker.check_player_name(p);
+            p.name = name;
+
+            if p.stolen_name && settings.announce_namesteal && p.time < settings.alert_period as u32 {
+                cmd.send_chat(&format!("A bot has stolen {}'s name.", &p.name));
+            }
+            if p.stolen_name && settings.mark_name_stealers {
+                p.player_type = PlayerType::Bot;
+
+                if let Some(notes) = &mut p.notes {
+                    notes.push_str("\nAutomatically marked as name-stealing bot.");
+                } else {
+                    p.notes = Some(String::from("Automatically marked as name-stealing bot."));
+                    player_checker.update_player(&p);
+                }
+            }
         }
-        p.name = name;
 
     // Create a new player entry
     } else {
-        let mut new_connection: bool = false;
-        if (time as f32) < settings.alert_period {
-            new_connection = true;
-        }
-
         // Construct new player for the list
         let mut p = Player {
             userid: caps[1].to_string(),
@@ -116,7 +121,6 @@ pub fn fn_status(
             notes: None,
 
             accounted: true,
-            new_connection,
             stolen_name,
         };
 
@@ -124,6 +128,14 @@ pub fn fn_status(
             log::info!("Known {:?} joining: {}", p.player_type, p.name);
         } else if player_checker.check_player_name(&mut p) {
             log::info!("Unknown {:?} joining: {}", p.player_type, p.name);
+        }
+
+        if stolen_name && settings.announce_namesteal {
+            cmd.send_chat(&format!("A bot has stolen {}'s name.", &p.name));
+        }
+        if stolen_name && settings.mark_name_stealers {
+            p.notes = Some(String::from("Automatically marked as name-stealing bot."));
+            player_checker.update_player(&p);
         }
 
         server.players.insert(p.steamid.clone(), p);
@@ -178,12 +190,6 @@ pub fn fn_lobby(
         Some(p) => {
             p.team = team;
             p.accounted = true;
-
-            // Alert server of bot joining the server
-            if p.new_connection && p.player_type == PlayerType::Bot && set.announce_bots {
-                serv.new_bots.push((p.name.clone(), p.team));
-                p.new_connection = false;
-            }
         }
     }
 }

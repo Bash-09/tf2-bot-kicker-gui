@@ -180,15 +180,15 @@ pub fn render(
 
             ui.checkbox(&mut state.settings.announce_bots, "Announce Bots").on_hover_text("Send a chat message indicating Bots joining the server.");
             ui.checkbox(&mut state.settings.announce_cheaters, "Announce Cheaters").on_hover_text("Send a chat message indicating cheaters joining the server.");
-            ui.checkbox(&mut state.settings.announce_namesteal, "Announce Name-stealing").on_hover_text("Send a chat message when an account's name is changed to imitate another player.");
+            ui.checkbox(&mut state.settings.announce_namesteal, "Announce Name-stealing").on_hover_text("Send a chat message when an account's name is changed to imitate another player (Does not consider the chat period).");
 
             ui.horizontal(|ui| {
-                ui.add_enabled(state.settings.announce_bots,
+                ui.add_enabled(state.settings.announce_bots || state.settings.announce_cheaters,
                     egui::DragValue::new(&mut state.settings.alert_period)
                         .speed(0.1)
                         .clamp_range(RangeInclusive::new(0.5, 60.0)),
                 );
-                ui.add_enabled(state.settings.announce_bots,
+                ui.add_enabled(state.settings.announce_bots || state.settings.announce_cheaters,
                     Label::new("Chat Message Period")).on_hover_text("Time between sending chat messages.");
             });
 

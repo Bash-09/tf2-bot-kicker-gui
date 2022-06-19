@@ -53,6 +53,7 @@ impl CommandManager {
 
     pub fn run_command(&mut self, command: &str) -> Option<String> {
         let mut out = None;
+        log::debug!("Running command \"{}\"", command);
 
         self.runtime.block_on(async {
             if let Some(rcon) = &mut self.rcon {
@@ -65,7 +66,8 @@ impl CommandManager {
     }
 
     pub fn kick_player(&mut self, player_userid: &str) -> Option<String> {
-        return self.run_command(&format!("callvote kick \"{}\"", player_userid));
+        let command = format!("callvote kick {}", player_userid);
+        return self.run_command(&command);
     }
 
     pub fn send_chat(&mut self, message: &str) -> Option<String> {

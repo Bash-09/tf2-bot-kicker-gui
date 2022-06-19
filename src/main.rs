@@ -19,8 +19,9 @@ use egui_winit::winit::{
     dpi::{PhysicalPosition, PhysicalSize},
     window::WindowBuilder,
 };
+use glium::{glutin::{self, ContextBuilder}, Display};
 use glium_app::{
-    context::Context, run, utils::persistent_window::PersistentWindowManager, Application,
+    context::Context, utils::persistent_window::PersistentWindowManager, Application, run_with_context,
 };
 use server::{player::PlayerType, *};
 use state::State;
@@ -44,7 +45,13 @@ fn main() {
         .with_inner_size(inner_size)
         .with_position(outer_pos);
 
-    run(app, wb);
+    let event_loop = glutin::event_loop::EventLoop::new();
+    let cb = ContextBuilder::new().with_vsync(true);
+    let display = Display::new(wb, cb, &event_loop).expect("Failed to open Display!");
+    let egui_glium = egui_glium::EguiGlium::new(&display);
+    let context: Context = Context::new(display, egui_glium);
+
+    run_with_context(app, context, event_loop);
 }
 
 pub struct TF2BotKicker {
@@ -144,6 +151,10 @@ impl Application for TF2BotKicker {
             state
                 .server
                 .kick_players_of_type(&state.settings, &mut self.cmd, PlayerType::Bot);
+        }
+
+        if state.alert_timer.update() {
+            state.server.send_chat_messages(&state.settings, &mut self.cmd);
         }
 
         // Send chat alerts

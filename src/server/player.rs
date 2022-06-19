@@ -70,7 +70,6 @@ pub struct Player {
     pub notes: Option<String>,
 
     pub accounted: bool,
-    pub new_connection: bool,
     pub stolen_name: bool,
 }
 

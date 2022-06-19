@@ -5,11 +5,11 @@ use std::collections::HashMap;
 pub mod player;
 use player::Player;
 use player::PlayerState;
-use player::Team;
 
 use crate::command_manager::CommandManager;
 
 use self::player::PlayerType;
+use self::player::Team;
 
 use super::settings::Settings;
 
@@ -18,20 +18,17 @@ pub const COM_LOBBY: &str = "tf_lobby_debug";
 
 pub struct Server {
     pub players: HashMap<String, Player>,
-    pub new_bots: Vec<(String, Team)>,
 }
 
 impl Server {
     pub fn new() -> Server {
         Server {
             players: HashMap::with_capacity(24),
-            new_bots: Vec::new(),
         }
     }
 
     pub fn clear(&mut self) {
         self.players.clear();
-        self.new_bots.clear();
     }
 
     pub fn get_bots(&self) -> Vec<&Player> {
@@ -102,5 +99,87 @@ impl Server {
 
             v.accounted
         });
+    }
+
+    pub fn send_chat_messages(&self, settings: &Settings, cmd: &mut CommandManager) {
+        if !settings.announce_bots && !settings.announce_cheaters {
+            return;
+        }
+
+        let mut message = String::new();
+
+        let mut bots = false;
+        let mut cheaters = false;
+
+        let mut invaders = false;
+        let mut defenders = false;
+
+        // Get all illegitimate accounts
+        let mut accounts: Vec<&Player> = Vec::new();
+        for p in self.players.values().into_iter() {
+            if p.time > settings.alert_period as u32 {continue}
+
+            match p.player_type {
+                PlayerType::Player => continue,
+                PlayerType::Bot => {
+                    if !settings.announce_bots {continue}
+                    accounts.push(p);
+                    bots = true;
+                    invaders |= p.team == Team::Invaders;
+                    defenders |= p.team == Team::Defenders;
+                },
+                PlayerType::Cheater => {
+                    if !settings.announce_cheaters {continue}
+                    accounts.push(p);
+                    cheaters = true;
+                    invaders |= p.team == Team::Invaders;
+                    defenders |= p.team == Team::Defenders;
+                }
+            }
+        }
+
+        if accounts.is_empty() {return}
+
+        // Players joining
+        if bots && cheaters {
+            message.push_str("Bots and Cheaters joining ");
+        } else if bots {
+            message.push_str("Bots joining ");
+        } else if cheaters {
+            message.push_str("Cheaters joining ");
+        }
+
+        // Team
+        match self.players.get(&settings.user) {
+            Some(user) => {
+                if (invaders && defenders) || user.team == Team::None {
+                    message.push_str("the server: ");
+                } else if (invaders && user.team == Team::Invaders) || (defenders && user.team == Team::Defenders) {
+                    message.push_str("our team: ");
+                } else {
+                    message.push_str("the enemy team: ");
+                }
+            },
+            None => {
+                message.push_str("the server: ");
+            }
+        }
+
+        // Player names
+        let mut account_peekable = accounts.into_iter().peekable();
+        while let Some(account) = account_peekable.next() {
+            log::debug!("Bot time: {}", account.time);
+
+            message.push_str(&account.name);
+
+            if account_peekable.peek().is_some() {
+                message.push_str(", ");
+            } else {
+                message.push('.');
+            }
+        }
+
+        // Send message
+        cmd.send_chat(&message);
     }
 }
