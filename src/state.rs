@@ -66,7 +66,7 @@ impl State {
         match player_checker.read_players("cfg/players.json") {
             Ok(()) => {
                 log::info!("Loaded playerlist");
-            },
+            }
             Err(e) => {
                 log::error!("Failed to read playlist: {:?}", e);
             }
@@ -176,7 +176,5 @@ impl State {
         }
     }
 
-    pub fn kick_player(&self) {
-        
-    }
+    pub fn kick_player(&self) {}
 }

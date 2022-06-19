@@ -91,7 +91,11 @@ impl PlayerChecker {
     }
 
     /// Import all players' steamID from the provided file as a particular player type
-    pub fn read_from_steamid_list(&mut self, filename: &str, as_player_type: PlayerType) -> Result<(), std::io::Error> {
+    pub fn read_from_steamid_list(
+        &mut self,
+        filename: &str,
+        as_player_type: PlayerType,
+    ) -> Result<(), std::io::Error> {
         let reg = Regex::new(r#"\[?(?P<uuid>U:\d:\d+)\]?"#).unwrap();
 
         let mut file = File::open(filename)?;
@@ -108,7 +112,7 @@ impl PlayerChecker {
             match reg.captures(m.as_str()) {
                 None => {}
                 Some(c) => {
-                    let steamid  = c["uuid"].to_string();
+                    let steamid = c["uuid"].to_string();
 
                     if self.players.contains_key(&steamid) {
                         continue;
@@ -116,7 +120,10 @@ impl PlayerChecker {
                         let record = PlayerRecord {
                             steamid,
                             player_type: as_player_type,
-                            notes: Some(format!("Imported from {} as {:?}", filename, as_player_type)),
+                            notes: Some(format!(
+                                "Imported from {} as {:?}",
+                                filename, as_player_type
+                            )),
                         };
                         self.players.insert(record.steamid.clone(), record);
                     }
@@ -151,7 +158,6 @@ impl PlayerChecker {
         Ok(())
     }
 
-
     /// Save the current player record to a file
     pub fn save_players<P: AsRef<Path>>(&self, file: P) -> std::io::Result<()> {
         let players: Vec<&PlayerRecord> = self.players.values().collect();
@@ -167,22 +173,22 @@ impl PlayerChecker {
     }
 
     pub fn read_players<P: AsRef<Path>>(&mut self, file: P) -> Result<(), Box<dyn Error>> {
-
         let contents = std::fs::read_to_string(file)?;
         let json = json::parse(&contents)?;
 
         for p in json.members() {
-
             let steamid = p["steamid"].as_str().unwrap_or("");
             let player_type = p["player_type"].as_str().unwrap_or("");
             let notes = p["notes"].as_str().unwrap_or("");
 
-            if steamid == "" {continue}
+            if steamid == "" {
+                continue;
+            }
             let player_type = match player_type {
-                "Player" =>  PlayerType::Player,
-                "Bot" =>     PlayerType::Bot,
+                "Player" => PlayerType::Player,
+                "Bot" => PlayerType::Bot,
                 "Cheater" => PlayerType::Cheater,
-                _ => continue
+                _ => continue,
             };
 
             let notes = if notes.is_empty() {
@@ -202,5 +208,4 @@ impl PlayerChecker {
 
         Ok(())
     }
-
 }

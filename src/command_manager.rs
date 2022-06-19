@@ -1,5 +1,5 @@
 use rcon::Connection;
-use tokio::{runtime::Runtime, net::TcpStream};
+use tokio::{net::TcpStream, runtime::Runtime};
 
 pub struct CommandManager {
     runtime: Runtime,

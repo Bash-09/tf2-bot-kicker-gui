@@ -1,10 +1,21 @@
+use json::JsonValue;
 use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_REGEX_LIST: &str = "cfg/regx.txt";
 pub const DEFAULT_STEAMID_LIST: &str = "cfg/steamids.txt";
 
 #[derive(Serialize, Deserialize, Debug)]
+pub struct WindowState {
+    pub width: u32,
+    pub height: u32,
+    pub x: i32,
+    pub y: i32,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Settings {
+    pub window: WindowState,
+
     pub user: String,
     pub join_alert: bool,
     pub chat_reminders: bool,
@@ -18,16 +29,21 @@ pub struct Settings {
     pub tf2_directory: String,
 
     pub record_steamids: bool,
-    pub steamid_list: String,
     pub regex_list: String,
 
-    pub steamid_lists: Vec<String>,
     pub regex_lists: Vec<String>,
 }
 
 impl Settings {
     pub fn new() -> Settings {
         Settings {
+            window: WindowState {
+                width: 1100,
+                height: 500,
+                x: 200,
+                y: 200,
+            },
+
             user: String::from("U:1:XXXXXXX"),
             join_alert: false,
             chat_reminders: false,
@@ -41,10 +57,8 @@ impl Settings {
             tf2_directory: String::new(),
 
             record_steamids: true,
-            steamid_list: String::from(DEFAULT_STEAMID_LIST),
             regex_list: String::from(DEFAULT_REGEX_LIST),
 
-            steamid_lists: vec![DEFAULT_STEAMID_LIST.to_string()],
             regex_lists: vec![DEFAULT_REGEX_LIST.to_string()],
         }
     }
@@ -59,6 +73,17 @@ impl Settings {
         let json = json::parse(&contents)?;
 
         let mut set = Settings::new();
+
+        if let JsonValue::Object(window) = &json["window"] {
+            if let Some(width) = window["width"].as_i32() {
+                set.window.width = width.try_into().unwrap_or(set.window.width);
+            }
+            if let Some(height) = window["height"].as_i32() {
+                set.window.height = height.try_into().unwrap_or(set.window.height);
+            }
+            set.window.x = window["x"].as_i32().unwrap_or(set.window.x);
+            set.window.y = window["y"].as_i32().unwrap_or(set.window.y);
+        }
 
         set.user = json["user"].as_str().unwrap_or(&set.user).to_string();
         set.join_alert = json["join_alert"].as_bool().unwrap_or(set.join_alert);
@@ -86,23 +111,10 @@ impl Settings {
             .as_bool()
             .unwrap_or(set.record_steamids);
 
-        set.steamid_list = json["steamid_list"]
-            .as_str()
-            .unwrap_or(&set.steamid_list)
-            .to_string();
         set.regex_list = json["regex_list"]
             .as_str()
             .unwrap_or(&set.regex_list)
             .to_string();
-
-        if json["steamid_lists"].is_array() {
-            set.steamid_lists.clear();
-            for i in json["steamid_lists"].members() {
-                if let Some(list) = i.as_str() {
-                    set.steamid_lists.push(list.to_string());
-                }
-            }
-        }
 
         if json["regex_lists"].is_array() {
             set.regex_lists.clear();
@@ -117,9 +129,10 @@ impl Settings {
     }
 
     /// Directly serializes the object to JSON and attempts to write it to the specified file.
-    pub fn export(&self, file: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn export(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let _new_dir = std::fs::create_dir("cfg");
         return match serde_json::to_string(self) {
-            Ok(contents) => match std::fs::write(file, &contents) {
+            Ok(contents) => match std::fs::write("cfg/settings.json", &contents) {
                 Ok(_) => Ok(()),
                 Err(e) => Err(Box::new(e)),
             },
