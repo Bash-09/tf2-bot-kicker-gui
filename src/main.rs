@@ -102,6 +102,7 @@ impl Application for TF2BotKicker {
             log::debug!("{}", state.message);
         }
 
+        // Parse output from `status` and other console output
         match &mut state.log {
             Some(lw) => {
                 // If there is a loaded dir, process any new console lines
@@ -114,6 +115,7 @@ impl Application for TF2BotKicker {
                                 c,
                                 &state.settings,
                                 &mut state.player_checker,
+                                &mut self.cmd,
                             );
                             continue;
                         }
@@ -125,6 +127,7 @@ impl Application for TF2BotKicker {
                                 c,
                                 &state.settings,
                                 &mut state.player_checker,
+                                &mut self.cmd,
                             );
                             continue;
                         }

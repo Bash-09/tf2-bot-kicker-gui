@@ -2,7 +2,6 @@ use json::JsonValue;
 use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_REGEX_LIST: &str = "cfg/regx.txt";
-pub const DEFAULT_STEAMID_LIST: &str = "cfg/steamids.txt";
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct WindowState {
@@ -17,9 +16,13 @@ pub struct Settings {
     pub window: WindowState,
 
     pub user: String,
-    pub join_alert: bool,
-    pub chat_reminders: bool,
-    pub kick: bool,
+
+    pub announce_bots: bool,
+    pub announce_cheaters: bool,
+    pub announce_namesteal: bool,
+
+    pub kick_bots: bool,
+    pub kick_cheaters: bool,
 
     pub refresh_period: f32,
     pub kick_period: f32,
@@ -28,7 +31,9 @@ pub struct Settings {
     pub rcon_password: String,
     pub tf2_directory: String,
 
-    pub record_steamids: bool,
+    pub save_bots: bool,
+    pub mark_name_stealers: bool,
+
     pub regex_list: String,
 
     pub regex_lists: Vec<String>,
@@ -45,9 +50,13 @@ impl Settings {
             },
 
             user: String::from("U:1:XXXXXXX"),
-            join_alert: false,
-            chat_reminders: false,
-            kick: true,
+
+            announce_bots: false,
+            announce_cheaters: false,
+            announce_namesteal: true,
+
+            kick_bots: true,
+            kick_cheaters: false,
 
             refresh_period: 10.0,
             kick_period: 10.0,
@@ -56,9 +65,10 @@ impl Settings {
             rcon_password: String::from("tf2bk"),
             tf2_directory: String::new(),
 
-            record_steamids: true,
-            regex_list: String::from(DEFAULT_REGEX_LIST),
+            save_bots: true,
+            mark_name_stealers: true,
 
+            regex_list: String::from(DEFAULT_REGEX_LIST),
             regex_lists: vec![DEFAULT_REGEX_LIST.to_string()],
         }
     }
@@ -86,11 +96,13 @@ impl Settings {
         }
 
         set.user = json["user"].as_str().unwrap_or(&set.user).to_string();
-        set.join_alert = json["join_alert"].as_bool().unwrap_or(set.join_alert);
-        set.chat_reminders = json["chat_reminders"]
-            .as_bool()
-            .unwrap_or(set.chat_reminders);
-        set.kick = json["kick"].as_bool().unwrap_or(set.kick);
+
+        set.announce_bots = json["announce_bots"].as_bool().unwrap_or(set.announce_bots);
+        set.announce_cheaters = json["announce_cheaters"].as_bool().unwrap_or(set.announce_cheaters);
+        set.announce_namesteal = json["announce_namesteal"].as_bool().unwrap_or(set.announce_namesteal);
+
+        set.kick_bots = json["kick_bots"].as_bool().unwrap_or(set.kick_bots);
+        set.kick_cheaters = json["kick_cheaters"].as_bool().unwrap_or(set.kick_cheaters);
 
         set.refresh_period = json["refresh_period"]
             .as_f32()
@@ -107,9 +119,13 @@ impl Settings {
             .unwrap_or(&set.tf2_directory)
             .to_string();
 
-        set.record_steamids = json["record_steamids"]
+        set.save_bots = json["save_bots"]
             .as_bool()
-            .unwrap_or(set.record_steamids);
+            .unwrap_or(set.save_bots);
+
+        set.mark_name_stealers = json["mark_name_stealers"]
+            .as_bool()
+            .unwrap_or(set.mark_name_stealers);
 
         set.regex_list = json["regex_list"]
             .as_str()

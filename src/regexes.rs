@@ -1,7 +1,7 @@
 #![allow(non_upper_case_globals)]
 #![allow(unused_variables)]
 
-use crate::server::*;
+use crate::{server::*, command_manager::CommandManager};
 
 use regex::{Captures, Regex};
 
@@ -17,6 +17,7 @@ pub struct LogMatcher {
         caps: Captures,
         set: &Settings,
         bot_checker: &mut PlayerChecker,
+        cmd: &mut CommandManager
     ),
 }
 
@@ -29,6 +30,7 @@ impl LogMatcher {
             caps: Captures,
             set: &Settings,
             bot_checker: &mut PlayerChecker,
+            cmd: &mut CommandManager
         ),
     ) -> LogMatcher {
         LogMatcher { r, f }
@@ -52,48 +54,53 @@ impl LogMatcher {
 pub const REGEX_STATUS: &str =
     r#"^#\s*(\d+)\s"(.*)"\s+\[(U:\d:\d+)\]\s+(\d*:?\d\d:\d\d)\s+\d+\s*\d+\s*(\w+).*$"#;
 pub fn fn_status(
-    serv: &mut Server,
+    server: &mut Server,
     str: &str,
     caps: Captures,
-    set: &Settings,
+    settings: &Settings,
     player_checker: &mut PlayerChecker,
+    cmd: &mut CommandManager
 ) {
-    let steamid = caps[3].replace("[⁣឴؜ᅟ ­͏]", "").to_string();
+    let steamid = caps[3].to_string();
 
-    let mut state = PlayerState::Spawning;
+    let mut player_state = PlayerState::Spawning;
     if caps[5].eq("active") {
-        state = PlayerState::Active;
+        player_state = PlayerState::Active;
     }
 
     // Get connected time of player
     let time = get_time(caps[4].to_string()).unwrap_or(0);
+    let name = caps[2].replace(INVIS_CHARS, "").trim().to_string();
 
     // Check for name stealing
-    let name = caps[2].trim().to_string();
     let mut stolen_name = false;
-    for (k, p) in &serv.players {
+    for (k, p) in &server.players {
         if steamid == p.steamid || time > p.time {
             continue;
         }
         stolen_name |= name == p.name;
     }
 
+    if stolen_name && settings.announce_namesteal {
+        todo!("Announce name-stealing");
+    }
+
     // Update an existing player
-    if let Some(p) = serv.players.get_mut(&steamid) {
+    if let Some(p) = server.players.get_mut(&steamid) {
         p.time = time;
-        p.state = state;
+        p.state = player_state;
         p.accounted = true;
         p.stolen_name = stolen_name;
 
         if p.stolen_name {
-            p.name = name;
             player_checker.check_player_name(p);
         }
+        p.name = name;
 
     // Create a new player entry
     } else {
         let mut new_connection: bool = false;
-        if (time as f32) < set.alert_period {
+        if (time as f32) < settings.alert_period {
             new_connection = true;
         }
 
@@ -104,7 +111,7 @@ pub fn fn_status(
             steamid,
             time,
             team: Team::None,
-            state,
+            state: player_state,
             player_type: PlayerType::Player,
             notes: None,
 
@@ -119,7 +126,7 @@ pub fn fn_status(
             log::info!("Unknown {:?} joining: {}", p.player_type, p.name);
         }
 
-        serv.players.insert(p.steamid.clone(), p);
+        server.players.insert(p.steamid.clone(), p);
     }
 }
 
@@ -156,6 +163,7 @@ pub fn fn_lobby(
     caps: Captures,
     set: &Settings,
     bot_checker: &mut PlayerChecker,
+    cmd: &mut CommandManager
 ) {
     let mut team = Team::None;
 
@@ -172,7 +180,7 @@ pub fn fn_lobby(
             p.accounted = true;
 
             // Alert server of bot joining the server
-            if p.new_connection && p.player_type == PlayerType::Bot && set.join_alert {
+            if p.new_connection && p.player_type == PlayerType::Bot && set.announce_bots {
                 serv.new_bots.push((p.name.clone(), p.team));
                 p.new_connection = false;
             }
@@ -187,6 +195,62 @@ pub fn fn_user_disconnect(
     caps: Captures,
     set: &Settings,
     bot_checker: &mut PlayerChecker,
+    cmd: &mut CommandManager
 ) {
     serv.clear();
 }
+
+const INVIS_CHARS: &'static [char] = &[
+    '\u{00a0}',
+    '\u{00ad}',
+    '\u{034f}',
+    '\u{061c}',
+    '\u{115f}',
+    '\u{1160}',
+    '\u{17b4}',
+    '\u{17b5}',
+    '\u{180e}',
+    '\u{2000}',
+    '\u{2001}',
+    '\u{2002}',
+    '\u{2003}',
+    '\u{2004}',
+    '\u{2005}',
+    '\u{2006}',
+    '\u{2007}',
+    '\u{2008}',
+    '\u{2009}',
+    '\u{200a}',
+    '\u{200b}',
+    '\u{200c}',
+    '\u{200d}',
+    '\u{200e}',
+    '\u{200f}',
+    '\u{202f}',
+    '\u{205f}',
+    '\u{2060}',
+    '\u{2061}',
+    '\u{2062}',
+    '\u{2063}',
+    '\u{2064}',
+    '\u{206a}',
+    '\u{206b}',
+    '\u{206c}',
+    '\u{206d}',
+    '\u{206e}',
+    '\u{206f}',
+    '\u{3000}',
+    '\u{2800}',
+    '\u{3164}',
+    '\u{feff}',
+    '\u{ffa0}',
+    '\u{1d159}',
+    '\u{1d173}',
+    '\u{1d174}',
+    '\u{1d175}',
+    '\u{1d176}',
+    '\u{1d177}',
+    '\u{1d178}',
+    '\u{1d179}',
+    '\u{1d17a}',
+];

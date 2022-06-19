@@ -13,7 +13,7 @@ use crate::server::player::PlayerType;
 
 use super::player::Player;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub struct PlayerRecord {
     pub steamid: String,
     pub player_type: PlayerType,
@@ -79,9 +79,13 @@ impl PlayerChecker {
             .insert(player.steamid.clone(), player.get_record());
     }
 
+    pub fn update_player_record(&mut self, player: PlayerRecord) {
+        self.players.insert(player.steamid.clone(), player);
+    }
+
     /// Removes the player from the saved record of players
-    pub fn remove_player(&mut self, player: &Player) {
-        self.players.remove(&player.steamid);
+    pub fn remove_player(&mut self, steamid: &str) {
+        self.players.remove(steamid);
     }
 
     /// Saves a new regex to match bots against

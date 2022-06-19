@@ -133,11 +133,10 @@ impl State {
                         c,
                         &self.settings,
                         &mut self.player_checker,
+                        cmd,
                     );
                 }
             }
         }
     }
-
-    pub fn kick_player(&self) {}
 }
