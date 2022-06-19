@@ -1,18 +1,24 @@
 use std::ops::RangeInclusive;
 
 use clipboard::{ClipboardContext, ClipboardProvider};
-use egui::{CollapsingHeader, Color32, ComboBox, Context, Id, Label, RichText, Ui, Separator};
+use egui::{CollapsingHeader, Color32, ComboBox, Context, Id, Label, RichText, Separator, Ui};
 use glium_app::utils::persistent_window::{PersistentWindow, PersistentWindowManager};
 use regex::Regex;
 
 use crate::{
     append_line,
+    command_manager::CommandManager,
     logwatcher::LogWatcher,
     server::player::{Player, PlayerState, PlayerType, Team},
     state::State,
 };
 
-pub fn render(gui_ctx: &Context, windows: &mut PersistentWindowManager<State>, state: &mut State) {
+pub fn render(
+    gui_ctx: &Context,
+    windows: &mut PersistentWindowManager<State>,
+    state: &mut State,
+    cmd: &mut CommandManager,
+) {
     // Top menu bar
     egui::TopBottomPanel::top("top_panel").show(gui_ctx, |ui| {
         egui::menu::bar(ui, |ui| {
@@ -233,18 +239,15 @@ pub fn render(gui_ctx: &Context, windows: &mut PersistentWindowManager<State>, s
 
 
         } else {
-            match &state.rcon {
+            match cmd.connected(&state.settings.rcon_password) {
                 // Connected and good
                 Ok(_) => {
-
                     if state.server.players.is_empty() {
                         ui.label("Not currently connected to a server.");
                     } else {
-
-                        render_players(ui, state, windows);
+                        render_players(ui, state, windows, cmd);
                     }
                 },
-
                 // RCON couldn't connect
                 Err(e) => {
                     match e {
@@ -322,7 +325,12 @@ fn truncate(s: &str, max_chars: usize) -> &str {
 }
 
 // Ui for a player
-fn render_players(ui: &mut Ui, state: &mut State, windows: &mut PersistentWindowManager<State>) {
+fn render_players(
+    ui: &mut Ui,
+    state: &mut State,
+    windows: &mut PersistentWindowManager<State>,
+    cmd: &mut CommandManager,
+) {
     let width = (ui.available_width() - 5.0) / 2.0;
 
     egui::ScrollArea::vertical().show(ui, |ui| {
@@ -457,7 +465,7 @@ fn render_players(ui: &mut Ui, state: &mut State, windows: &mut PersistentWindow
 
                         // Call votekick button
                         if ui.button(RichText::new("Call votekick").color(Color32::RED)).clicked() {
-                            log::error!("Not implemented yet");
+                            cmd.kick_player(&player.userid);
                         }
                     });
 

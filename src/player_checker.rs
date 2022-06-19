@@ -6,7 +6,6 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
-use json::JsonValue;
 use regex::Regex;
 use serde::Serialize;
 

@@ -1,10 +1,7 @@
-use tokio::net::TcpStream;
-
-use rcon::Connection;
 use regex::Regex;
-use tokio::runtime::Runtime;
 
 use crate::{
+    command_manager::{self, CommandManager},
     logwatcher::LogWatcher,
     player_checker::PlayerChecker,
     regexes::{
@@ -24,7 +21,6 @@ pub struct State {
     pub message: String,
 
     pub settings: Settings,
-    pub rcon: rcon::Result<Connection<TcpStream>>,
     pub log: Option<LogWatcher>,
 
     pub server: Server,
@@ -37,7 +33,7 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(runtime: &Runtime) -> State {
+    pub fn new() -> State {
         let settings: Settings;
 
         let mut message = String::from("Loaded");
@@ -81,11 +77,6 @@ impl State {
             }
         }
 
-        let mut rcon = None;
-        runtime.block_on(async {
-            rcon = Some(Connection::connect("127.0.0.1:27015", &settings.rcon_password).await);
-        });
-
         let log = LogWatcher::use_directory(&settings.tf2_directory);
 
         State {
@@ -95,7 +86,6 @@ impl State {
 
             message,
             settings,
-            rcon: rcon.unwrap(),
             log,
             server: Server::new(),
 
@@ -107,45 +97,18 @@ impl State {
         }
     }
 
-    /// Checks if a valid rcon connection is currently established
-    pub async fn rcon_connected(&mut self) -> bool {
-        match &mut self.rcon {
-            Ok(con) => match con.cmd("echo Ping").await {
-                Ok(_) => {
-                    return true;
-                }
-                Err(e) => {
-                    self.rcon = Err(e);
-                    return false;
-                }
-            },
-            Err(_) => {
-                match Connection::connect("127.0.0.1:27015", &self.settings.rcon_password).await {
-                    Ok(con) => {
-                        self.rcon = Ok(con);
-                        return true;
-                    }
-                    Err(e) => {
-                        self.rcon = Err(e);
-                        return false;
-                    }
-                }
-            }
-        }
-    }
-
     /// Begins a refresh on the local server state, any players unaccounted for since the last time this function was called will be removed.
-    pub async fn refresh(&mut self) {
-        if !self.rcon_connected().await {
+    pub fn refresh(&mut self, cmd: &mut CommandManager) {
+        if cmd.connected(&self.settings.rcon_password).is_err() {
             return;
         }
         self.server.prune();
 
         // Run status and tf_lobby_debug commands
-        let status = self.rcon.as_mut().unwrap().cmd("status").await;
-        let lobby = self.rcon.as_mut().unwrap().cmd("tf_lobby_debug").await;
+        let status = cmd.run_command(command_manager::CMD_STATUS);
+        let lobby = cmd.run_command(command_manager::CMD_TF_LOBBY_DEBUG);
 
-        if status.is_err() || lobby.is_err() {
+        if status.is_none() || lobby.is_none() {
             return;
         }
 

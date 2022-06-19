@@ -6,8 +6,8 @@ pub mod player;
 use player::Player;
 use player::PlayerState;
 use player::Team;
-use rcon::Connection;
-use tokio::net::TcpStream;
+
+use crate::command_manager::CommandManager;
 
 use self::player::PlayerType;
 
@@ -49,32 +49,32 @@ impl Server {
     /// Call a votekick on any players detected as bots.
     /// If userid is set in cfg/settings.cfg then it will only attempt to call vote on bots in the same team
     /// There is no way of knowing if a vote is in progress or the user is on cooldown so votes will still be attempted
-    pub async fn kick_bots(&mut self, set: &Settings, rcon: &mut Connection<TcpStream>) {
+    pub fn kick_players_of_type(
+        &mut self,
+        set: &Settings,
+        cmd: &mut CommandManager,
+        player_type: PlayerType,
+    ) {
+        if cmd.connected(&set.rcon_password).is_err() {
+            return;
+        }
+
         if !set.kick {
             return;
         }
 
-        let mut bots: Vec<&Player> = Vec::new();
-
         for p in self.players.values().into_iter() {
-            if p.player_type == PlayerType::Bot {
-                bots.push(p);
+            if p.state != PlayerState::Active || !p.accounted || p.player_type != player_type {
+                continue;
             }
-        }
-        bots = bots
-            .into_iter()
-            .filter(|p| p.state == PlayerState::Active && p.accounted)
-            .collect();
-
-        for p in bots {
             match self.players.get(&set.user) {
                 Some(user) => {
                     if user.team == p.team {
-                        let _cmd = rcon.cmd(&format!("callvote kick {}", p.userid)).await;
+                        cmd.kick_player(&p.userid);
                     }
                 }
                 None => {
-                    let _cmd = rcon.cmd(&format!("callvote kick {}", p.userid)).await;
+                    cmd.kick_player(&p.userid);
                 }
             }
         }

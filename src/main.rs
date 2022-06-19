@@ -14,14 +14,17 @@ pub mod state;
 pub mod timer;
 
 use chrono::{DateTime, Local};
-use egui_winit::winit::{dpi::{PhysicalSize, PhysicalPosition}, window::WindowBuilder};
+use command_manager::CommandManager;
+use egui_winit::winit::{
+    dpi::{PhysicalPosition, PhysicalSize},
+    window::WindowBuilder,
+};
 use glium_app::{
     context::Context, run, utils::persistent_window::PersistentWindowManager, Application,
 };
-use server::*;
+use server::{player::PlayerType, *};
 use state::State;
 use std::{fs::OpenOptions, io::Write, time::SystemTime};
-use tokio::runtime::Runtime;
 mod regexes;
 
 fn main() {
@@ -29,7 +32,10 @@ fn main() {
 
     let app = TF2BotKicker::new();
 
-    let inner_size = PhysicalSize::new(app.state.settings.window.width, app.state.settings.window.height);
+    let inner_size = PhysicalSize::new(
+        app.state.settings.window.width,
+        app.state.settings.window.height,
+    );
     let outer_pos = PhysicalPosition::new(app.state.settings.window.x, app.state.settings.window.y);
 
     let wb = WindowBuilder::new()
@@ -38,27 +44,26 @@ fn main() {
         .with_inner_size(inner_size)
         .with_position(outer_pos);
 
-
     run(app, wb);
 }
 
 pub struct TF2BotKicker {
     state: State,
+    cmd: CommandManager,
 
-    runtime: Runtime,
     windows: PersistentWindowManager<State>,
 }
 
 impl TF2BotKicker {
     // Create the application
     pub fn new() -> TF2BotKicker {
-        let runtime = Runtime::new().expect("Failed to create async runtime");
-        let state = State::new(&runtime);
+        let state = State::new();
+
+        let cmd = CommandManager::new(&state.settings.rcon_password);
 
         Self {
             state,
-
-            runtime,
+            cmd,
             windows: PersistentWindowManager::new(),
         }
     }
@@ -74,8 +79,7 @@ impl Application for TF2BotKicker {
     fn update(&mut self, _t: &glium_app::Timer, ctx: &mut Context) {
         let TF2BotKicker {
             state,
-
-            runtime,
+            cmd: _,
             windows,
         } = self;
 
@@ -88,17 +92,15 @@ impl Application for TF2BotKicker {
         state.kick_timer.go(state.settings.kick_period);
         state.alert_timer.go(state.settings.alert_period);
 
-        runtime.block_on(async {
-            // Refresh server
-            if state.refresh_timer.update() {
-                state.refresh().await;
+        // Refresh server
+        if state.refresh_timer.update() {
+            state.refresh(&mut self.cmd);
 
-                let system_time = SystemTime::now();
-                let datetime: DateTime<Local> = system_time.into();
-                state.message = format!("Refreshed ({})", datetime.format("%T"));
-                log::debug!("{}", state.message);
-            }
-        });
+            let system_time = SystemTime::now();
+            let datetime: DateTime<Local> = system_time.into();
+            state.message = format!("Refreshed ({})", datetime.format("%T"));
+            log::debug!("{}", state.message);
+        }
 
         match &mut state.log {
             Some(lw) => {
@@ -134,32 +136,26 @@ impl Application for TF2BotKicker {
             None => {}
         }
 
-        runtime.block_on(async {
-            // Kick Bots
-            if state.kick_timer.update() {
-                if state.rcon_connected().await {
-                    state
-                        .server
-                        .kick_bots(&state.settings, state.rcon.as_mut().unwrap())
-                        .await;
-                }
-            }
+        // Kick Bots
+        if state.kick_timer.update() {
+            state
+                .server
+                .kick_players_of_type(&state.settings, &mut self.cmd, PlayerType::Bot);
+        }
 
-            // Send chat alerts
-            // if state.alert_timer.update() {
-            //     if state.rcon_connected().await {
-            //         state
-            //             .server
-            //             .announce_bots(&state.settings, state.rcon.as_mut().unwrap())
-            //             .await;
-            //     }
-            // }
-        });
+        // Send chat alerts
+        // if state.alert_timer.update() {
+        //     if state.rcon_connected() {
+        //         state
+        //             .server
+        //             .announce_bots(&state.settings, state.rcon.as_mut().unwrap());
+        //     }
+        // }
 
         let mut target = ctx.dis.draw();
 
         let _ = ctx.gui.run(&ctx.dis, |gui_ctx| {
-            gui::render(gui_ctx, windows, state);
+            gui::render(gui_ctx, windows, state, &mut self.cmd);
             windows.render(state, gui_ctx);
         });
 
