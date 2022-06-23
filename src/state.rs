@@ -18,8 +18,6 @@ pub struct State {
     pub alert_timer: Timer,
     pub kick_timer: Timer,
 
-    pub message: String,
-
     pub settings: Settings,
     pub log: Option<LogWatcher>,
 
@@ -36,15 +34,11 @@ impl State {
     pub fn new() -> State {
         let settings: Settings;
 
-        let mut message = String::from("Loaded");
-        log::info!("Loaded");
-
         // Attempt to load settings, create new default settings if it can't load an existing file
         let set = Settings::import("cfg/settings.json");
         if set.is_err() {
             settings = Settings::new();
-            message = format!("Error loading settings: {}", set.unwrap_err());
-            log::warn!("{}", message);
+            log::warn!("{}", format!("Error loading settings: {}", set.unwrap_err()));
         } else {
             settings = set.unwrap();
         }
@@ -70,8 +64,7 @@ impl State {
         match player_checker.read_regex_list(REGEX_LIST) {
             Ok(_) => {}
             Err(e) => {
-                message = format!("Error loading {}: {}", REGEX_LIST, e);
-                log::error!("{}", message);
+                log::error!("{}", format!("Error loading {}: {}", REGEX_LIST, e));
             }
         }
 
@@ -82,7 +75,6 @@ impl State {
             alert_timer: Timer::new(),
             kick_timer: Timer::new(),
 
-            message,
             settings,
             log,
             server: Server::new(),

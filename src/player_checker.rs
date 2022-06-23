@@ -108,10 +108,7 @@ impl PlayerChecker {
                         let record = PlayerRecord {
                             steamid,
                             player_type: as_player_type,
-                            notes: format!(
-                                "Imported from {} as {:?}",
-                                filename, as_player_type
-                            ),
+                            notes: format!("Imported from {} as {:?}", filename, as_player_type),
                         };
                         self.players.insert(record.steamid.clone(), record);
                     }

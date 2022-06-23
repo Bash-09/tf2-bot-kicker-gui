@@ -44,8 +44,7 @@ fn main() {
     );
     let outer_pos = PhysicalPosition::new(app.state.settings.window.x, app.state.settings.window.y);
 
-    let mut logo =
-        image::io::Reader::new(Cursor::new(include_bytes!("../images/logo.png")));
+    let mut logo = image::io::Reader::new(Cursor::new(include_bytes!("../images/logo.png")));
     logo.set_format(ImageFormat::Png);
 
     let wb = WindowBuilder::new()
@@ -122,8 +121,7 @@ impl Application for TF2BotKicker {
 
             let system_time = SystemTime::now();
             let datetime: DateTime<Local> = system_time.into();
-            state.message = format!("Refreshed ({})", datetime.format("%T"));
-            log::debug!("{}", state.message);
+            log::debug!("{}", format!("Refreshed ({})", datetime.format("%T")));
         }
 
         // Parse output from `status` and other console output

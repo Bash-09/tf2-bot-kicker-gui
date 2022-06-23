@@ -104,7 +104,8 @@ pub fn fn_status(
                 if !p.notes.is_empty() {
                     p.notes.push('\n');
                 }
-                p.notes.push_str("Automatically marked as name-stealing bot.");
+                p.notes
+                    .push_str("Automatically marked as name-stealing bot.");
                 player_checker.update_player(&p);
             }
         }
@@ -142,7 +143,8 @@ pub fn fn_status(
             if !p.notes.is_empty() {
                 p.notes.push('\n');
             }
-            p.notes.push_str("Automatically marked as name-stealing bot.");
+            p.notes
+                .push_str("Automatically marked as name-stealing bot.");
             player_checker.update_player(&p);
         }
 

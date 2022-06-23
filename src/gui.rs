@@ -12,10 +12,13 @@ use crate::{
     state::State,
 };
 
-use self::{regex_windows::{view_regexes_window, new_regex_window}, player_windows::view_players_window};
+use self::{
+    player_windows::view_players_window,
+    regex_windows::{new_regex_window, view_regexes_window},
+};
 
-pub mod regex_windows;
 pub mod player_windows;
+pub mod regex_windows;
 
 pub fn render(
     gui_ctx: &Context,
@@ -25,6 +28,8 @@ pub fn render(
 ) {
     // Top menu bar
     egui::TopBottomPanel::top("top_panel").show(gui_ctx, |ui| {
+
+        // File
         egui::menu::bar(ui, |ui| {
             ui.menu_button("File", |ui| {
                 if ui.button("Set TF2 Directory").clicked() {
@@ -45,7 +50,10 @@ pub fn render(
                         None => {}
                     }
                 }
+            });
 
+            // Import Regexes and SteamIDs
+            ui.menu_button("Import", |ui| {
                 let mut import_list: Option<PlayerType> = None;
                 if ui.button("Import SteamIDs as Bots").clicked() {
                     import_list = Some(PlayerType::Bot);
@@ -72,15 +80,16 @@ pub fn render(
                                 .read_from_steamid_list(&dir, player_type)
                             {
                                 Ok(_) => {
-                                    state.message = format!(
-                                        "Added {} as a steamid list",
-                                        &dir.split("/").last().unwrap()
+                                    log::info!(
+                                        "{}",
+                                        format!(
+                                            "Added {} as a steamid list",
+                                            &dir.split("/").last().unwrap()
+                                        )
                                     );
-                                    log::info!("{}", state.message);
                                 }
                                 Err(e) => {
-                                    state.message = format!("{}", e);
-                                    log::error!("Failed to add steamid list: {}", state.message);
+                                    log::error!("Failed to add steamid list: {}", format!("{}", e));
                                 }
                             }
                         }
@@ -93,10 +102,8 @@ pub fn render(
                 }
             });
 
-
-
-            ui.menu_button("Player Detection", |ui| {
-
+            // Saved Data
+            ui.menu_button("Saved Data", |ui| {
                 if ui.button("Regexes").clicked() {
                     windows.push(view_regexes_window());
                 }
@@ -104,16 +111,12 @@ pub fn render(
                 if ui.button("Saved Players").clicked() {
                     windows.push(view_players_window());
                 }
-
             });
         });
     });
 
     // Message and eframe/egui credits
     egui::TopBottomPanel::bottom("bottom_panel").show(gui_ctx, |ui| {
-        // Display a little bit of information
-        ui.label(&state.message);
-
         // Credits at the bottom left
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 0.0;
@@ -191,21 +194,17 @@ pub fn render(
     egui::CentralPanel::default().show(gui_ctx, |ui| {
 
         if state.log.is_none() {
-
             ui.label("No valid TF2 directory set. (It should be the one inside \"common\")\n\n");
-
             ui.label("Instructions:");
-
             ui.horizontal(|ui| {
                 ui.label("1. Add");
-                copy_label(&mut state.message, "-condebug -conclearlog -usercon", ui);
+                copy_label("-condebug -conclearlog -usercon", ui);
                 ui.label("to your TF2 launch options and start the game.");
             });
 
             ui.horizontal(|ui| {
                 ui.label("2. Click");
                 if ui.button("Set your TF2 directory").clicked() {
-
                     match rfd::FileDialog::new().pick_folder() {
                         Some(pb) => {
                             let dir;
@@ -248,7 +247,7 @@ pub fn render(
 
                             ui.horizontal(|ui| {
                                 ui.label("Run ");
-                                copy_label(&mut state.message, &format!("rcon_password {}", &state.settings.rcon_password), ui);
+                                copy_label(&format!("rcon_password {}", &state.settings.rcon_password), ui);
                                 ui.label("in your TF2 console, and make sure it is in your autoexec.cfg file.");
                             });
                         },
@@ -260,12 +259,12 @@ pub fn render(
                             ui.label("Is TF2 running?");
                             ui.horizontal(|ui| {
                                 ui.label("Does your autoexec.cfg file contain");
-                                copy_label(&mut state.message, "net_start", ui);
+                                copy_label("net_start", ui);
                                 ui.label("?");
                             });
                             ui.horizontal(|ui| {
                                 ui.label("Does your TF2 launch option include");
-                                copy_label(&mut state.message, "-usercon", ui);
+                                copy_label("-usercon", ui);
                                 ui.label("?");
                             });
                         }
@@ -277,24 +276,15 @@ pub fn render(
 }
 
 // Make a selectable label which copies it's text to the clipboard on click
-fn copy_label(log: &mut String, text: &str, ui: &mut Ui) {
+fn copy_label(text: &str, ui: &mut Ui) {
     let lab = ui.selectable_label(false, text);
     if lab.clicked() {
         let ctx: Result<ClipboardContext, Box<dyn std::error::Error>> = ClipboardProvider::new();
         match ctx {
             Ok(mut ctx) => {
-                if ctx.set_contents(text.to_string()).is_ok() {
-                    log.clear();
-                    log.push_str(&format!("Copied '{}' to clipboard.", text));
-                } else {
-                    log.clear();
-                    log.push_str("Couldn't copy text to clipboard");
-                }
+                ctx.set_contents(text.to_string()).ok();
             }
-            Err(e) => {
-                log.clear();
-                log.push_str(&format!("Couldn't copy text to clipboard: {}", e));
-            }
+            Err(_) => {}
         }
     }
     lab.on_hover_text("Copy");
@@ -445,11 +435,7 @@ fn render_players(
                                             Box<dyn std::error::Error>,
                                         > = ClipboardProvider::new();
                                         ctx.unwrap().set_contents(player.steamid.clone()).unwrap();
-                                        state.message.clear();
-                                        state
-                                            .message
-                                            .push_str(&format!("Copied \"{}\"", player.steamid));
-                                        log::info!("{}", state.message);
+                                        log::info!("{}", format!("Copied \"{}\"", player.steamid));
                                     }
                                     if ui.button("Copy Name").clicked() {
                                         let ctx: Result<
@@ -457,11 +443,7 @@ fn render_players(
                                             Box<dyn std::error::Error>,
                                         > = ClipboardProvider::new();
                                         ctx.unwrap().set_contents(player.name.clone()).unwrap();
-                                        state.message.clear();
-                                        state
-                                            .message
-                                            .push_str(&format!("Copied \"{}\"", player.name));
-                                        log::info!("{}", state.message);
+                                        log::info!("{}", format!("Copied \"{}\"", player.name));
                                     }
                                 });
 
@@ -481,9 +463,8 @@ fn render_players(
                                         let but = ui
                                             .button(RichText::new("Save Name").color(Color32::RED));
                                         if but.clicked() {
-                                            windows.push(new_regex_window(
-                                                player.get_export_regex(),
-                                            ));
+                                            windows
+                                                .push(new_regex_window(player.get_export_regex()));
                                         }
                                         but.on_hover_text(
                                     RichText::new(
@@ -577,13 +558,13 @@ fn create_dialog_box(title: String, text: String) -> PersistentWindow<State> {
         let mut open = true;
 
         egui::Window::new(&title)
-        .id(Id::new(id))
-        .open(&mut open)
-        .collapsible(false)
-        .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-        .show(ctx, |ui| {
-            ui.label(&text);
-        });
+            .id(Id::new(id))
+            .open(&mut open)
+            .collapsible(false)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .show(ctx, |ui| {
+                ui.label(&text);
+            });
 
         open
     }))
