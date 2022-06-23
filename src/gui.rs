@@ -3,16 +3,19 @@ use std::ops::RangeInclusive;
 use clipboard::{ClipboardContext, ClipboardProvider};
 use egui::{CollapsingHeader, Color32, ComboBox, Context, Id, Label, RichText, Separator, Ui};
 use glium_app::utils::persistent_window::{PersistentWindow, PersistentWindowManager};
-use regex::Regex;
 
 use crate::{
-    append_line,
     command_manager::CommandManager,
     logwatcher::LogWatcher,
     player_checker::PlayerRecord,
     server::player::{Player, PlayerState, PlayerType, Team},
     state::State,
 };
+
+use self::{regex_windows::{view_regexes_window, new_regex_window}, player_windows::view_players_window};
+
+pub mod regex_windows;
+pub mod player_windows;
 
 pub fn render(
     gui_ctx: &Context,
@@ -38,40 +41,6 @@ pub fn render(
                             }
                             state.settings.tf2_directory = dir;
                             state.log = LogWatcher::use_directory(&state.settings.tf2_directory);
-                        }
-                        None => {}
-                    }
-                }
-
-                if ui.button("Add Regex List").clicked() {
-                    match rfd::FileDialog::new().set_directory("cfg").pick_file() {
-                        Some(pb) => {
-                            let dir;
-                            // Try to make it a relative directory instead of going from root
-                            match pb.strip_prefix(std::env::current_dir().unwrap()) {
-                                Ok(pb) => {
-                                    dir = pb.to_string_lossy().to_string();
-                                }
-                                Err(_) => {
-                                    dir = pb.to_string_lossy().to_string();
-                                }
-                            }
-                            if !state.settings.regex_lists.contains(&dir) {
-                                match state.player_checker.read_regex_list(&dir) {
-                                    Ok(_) => {
-                                        state.message = format!(
-                                            "Added {} as a regex list",
-                                            &dir.split("/").last().unwrap()
-                                        );
-                                        log::info!("{}", state.message);
-                                    }
-                                    Err(e) => {
-                                        state.message = format!("{}", e);
-                                        log::error!("{}", state.message);
-                                    }
-                                }
-                                state.settings.regex_lists.push(dir);
-                            }
                         }
                         None => {}
                     }
@@ -118,6 +87,24 @@ pub fn render(
                         None => {}
                     }
                 }
+
+                if ui.button("Import regex list").clicked() {
+                    todo!("Import regex lsit");
+                }
+            });
+
+
+
+            ui.menu_button("Player Detection", |ui| {
+
+                if ui.button("Regexes").clicked() {
+                    windows.push(view_regexes_window());
+                }
+
+                if ui.button("Saved Players").clicked() {
+                    windows.push(view_players_window());
+                }
+
             });
         });
     });
@@ -180,7 +167,7 @@ pub fn render(
 
             ui.checkbox(&mut state.settings.announce_bots, "Announce Bots").on_hover_text("Send a chat message indicating Bots joining the server.");
             ui.checkbox(&mut state.settings.announce_cheaters, "Announce Cheaters").on_hover_text("Send a chat message indicating cheaters joining the server.");
-            ui.checkbox(&mut state.settings.announce_namesteal, "Announce Name-stealing").on_hover_text("Send a chat message when an account's name is changed to imitate another player (Does not consider the chat period).");
+            ui.checkbox(&mut state.settings.announce_namesteal, "Announce Name-stealing").on_hover_text("Send a chat message when an account's name is changed to imitate another player (This is not affected by the chat message period).");
 
             ui.horizontal(|ui| {
                 ui.add_enabled(state.settings.announce_bots || state.settings.announce_cheaters,
@@ -195,15 +182,7 @@ pub fn render(
             ui.add(Separator::default().spacing(20.0));
             ui.heading("Bot Detection");
 
-            let auto_save_button = ui.checkbox(
-                &mut state.settings.save_bots,
-                &format!("Save detected bots"),
-            );
-            auto_save_button.on_hover_text(
-                "Players detected as a bot by their name will be automatically saved.",
-            );
-
-            ui.checkbox(&mut state.settings.mark_name_stealers, "Mark name-stealers as bots")
+            ui.checkbox(&mut state.settings.mark_name_stealers, "Mark accounts with a stolen name as bots")
                 .on_hover_text("Accounts that change their name to another account's name will be automatically marked as a name-stealing bot.");
         });
     });
@@ -445,9 +424,9 @@ fn render_players(
 
                                     if changed {
                                         if player.player_type == PlayerType::Player
-                                            && player.notes.is_none()
+                                            && player.notes.is_empty()
                                         {
-                                            state.player_checker.remove_player(&player.steamid);
+                                            state.player_checker.players.remove(&player.steamid);
                                         } else {
                                             state.player_checker.update_player(player);
                                         }
@@ -502,7 +481,7 @@ fn render_players(
                                         let but = ui
                                             .button(RichText::new("Save Name").color(Color32::RED));
                                         if but.clicked() {
-                                            windows.push(create_export_regex_window(
+                                            windows.push(new_regex_window(
                                                 player.get_export_regex(),
                                             ));
                                         }
@@ -517,7 +496,7 @@ fn render_players(
                             });
 
                     // Notes / Stolen name warning
-                    if player.stolen_name || player.notes.is_some() {
+                    if player.stolen_name || !player.notes.is_empty() {
                         header.header_response.on_hover_ui(|ui| {
                             if player.stolen_name {
                                 ui.label(
@@ -527,8 +506,8 @@ fn render_players(
                                     .color(Color32::YELLOW),
                                 );
                             }
-                            if let Some(notes) = &player.notes {
-                                ui.label(notes);
+                            if !player.notes.is_empty() {
+                                ui.label(&player.notes);
                             }
                         });
                     }
@@ -560,51 +539,8 @@ fn render_players(
     });
 }
 
-fn create_export_regex_window(mut regex: String) -> PersistentWindow<State> {
-    PersistentWindow::new(Box::new(move |id, gui_ctx, state| {
-        let mut open = true;
-
-        let mut exported = false;
-        egui::Window::new("Export Name/Regex")
-            .id(Id::new(id))
-            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-            .open(&mut open)
-            .collapsible(false)
-            .show(gui_ctx, |ui| {
-                ui.vertical_centered(|ui| {
-                    ui.text_edit_singleline(&mut regex);
-                    if ui.button("Confirm").clicked() {
-                        let reg = Regex::new(&regex);
-                        match reg {
-                            Ok(reg) => {
-                                append_line(&regex, &state.settings.regex_list);
-                                state.player_checker.append_regex(reg);
-                                state.message = format!(
-                                    "Saved \"{}\" to {}",
-                                    &regex, &state.settings.regex_list
-                                );
-                                log::info!("{}", state.message);
-                                exported = true;
-                            }
-                            Err(e) => {
-                                state.message = format!("Invalid Regex: {}", e);
-                                log::error!("{}", state.message);
-                            }
-                        }
-                    }
-                });
-            });
-
-        open & !exported
-    }))
-}
-
 fn create_edit_notes_window(mut record: PlayerRecord) -> PersistentWindow<State> {
-    if record.notes.is_none() {
-        record.notes = Some(String::new());
-    }
-
-    PersistentWindow::new(Box::new(move |id, gui_ctx, state| {
+    PersistentWindow::new(Box::new(move |id, _, gui_ctx, state| {
         let mut open = true;
         let mut saved = false;
         egui::Window::new(format!("Edit notes for {}", &record.steamid))
@@ -612,7 +548,7 @@ fn create_edit_notes_window(mut record: PlayerRecord) -> PersistentWindow<State>
             .open(&mut open)
             .show(gui_ctx, |ui| {
                 ui.vertical_centered(|ui| {
-                    ui.text_edit_multiline(record.notes.as_mut().unwrap());
+                    ui.text_edit_multiline(&mut record.notes);
                     ui.horizontal(|ui| {
                         if ui.button("Save").clicked() {
                             saved = true;
@@ -620,10 +556,9 @@ fn create_edit_notes_window(mut record: PlayerRecord) -> PersistentWindow<State>
                                 p.notes = record.notes.clone();
                             }
 
-                            if record.notes.as_ref().unwrap().is_empty() {
-                                record.notes = None;
+                            if record.notes.is_empty() {
                                 if record.player_type == PlayerType::Player {
-                                    state.player_checker.remove_player(&record.steamid);
+                                    state.player_checker.players.remove(&record.steamid);
                                     return;
                                 }
                             }
@@ -634,5 +569,22 @@ fn create_edit_notes_window(mut record: PlayerRecord) -> PersistentWindow<State>
                 });
             });
         open & !saved
+    }))
+}
+
+fn create_dialog_box(title: String, text: String) -> PersistentWindow<State> {
+    PersistentWindow::new(Box::new(move |id, _, ctx, _| {
+        let mut open = true;
+
+        egui::Window::new(&title)
+        .id(Id::new(id))
+        .open(&mut open)
+        .collapsible(false)
+        .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+        .show(ctx, |ui| {
+            ui.label(&text);
+        });
+
+        open
     }))
 }

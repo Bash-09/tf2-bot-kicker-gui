@@ -1,5 +1,4 @@
 extern crate chrono;
-extern crate clipboard;
 extern crate env_logger;
 extern crate rfd;
 extern crate serde;
@@ -17,15 +16,21 @@ use chrono::{DateTime, Local};
 use command_manager::CommandManager;
 use egui_winit::winit::{
     dpi::{PhysicalPosition, PhysicalSize},
-    window::WindowBuilder,
+    window::{Icon, WindowBuilder},
 };
-use glium::{glutin::{self, ContextBuilder}, Display};
+use glium::{
+    glutin::{self, ContextBuilder},
+    Display,
+};
 use glium_app::{
-    context::Context, utils::persistent_window::PersistentWindowManager, Application, run_with_context,
+    context::Context, run_with_context, utils::persistent_window::PersistentWindowManager,
+    Application,
 };
+use image::{EncodableLayout, ImageFormat};
+use player_checker::{PLAYER_LIST, REGEX_LIST};
 use server::{player::PlayerType, *};
 use state::State;
-use std::{fs::OpenOptions, io::Write, time::SystemTime};
+use std::{io::Cursor, time::SystemTime};
 mod regexes;
 
 fn main() {
@@ -39,7 +44,19 @@ fn main() {
     );
     let outer_pos = PhysicalPosition::new(app.state.settings.window.x, app.state.settings.window.y);
 
+    let mut logo =
+        image::io::Reader::new(Cursor::new(include_bytes!("../images/logo.png")));
+    logo.set_format(ImageFormat::Png);
+
     let wb = WindowBuilder::new()
+        .with_window_icon(Some(
+            Icon::from_rgba(
+                logo.decode().unwrap().into_rgba8().as_bytes().to_vec(),
+                512,
+                512,
+            )
+            .unwrap(),
+        ))
         .with_title("TF2 Bot Kicker by Bash09")
         .with_resizable(true)
         .with_inner_size(inner_size)
@@ -154,7 +171,9 @@ impl Application for TF2BotKicker {
         }
 
         if state.alert_timer.update() {
-            state.server.send_chat_messages(&state.settings, &mut self.cmd);
+            state
+                .server
+                .send_chat_messages(&state.settings, &mut self.cmd);
         }
 
         // Send chat alerts
@@ -178,8 +197,11 @@ impl Application for TF2BotKicker {
     }
 
     fn close(&mut self, ctx: &Context) {
-        if let Err(e) = self.state.player_checker.save_players("cfg/players.json") {
+        if let Err(e) = self.state.player_checker.save_players(PLAYER_LIST) {
             log::error!("Failed to save players: {:?}", e);
+        }
+        if let Err(e) = self.state.player_checker.save_regex(REGEX_LIST) {
+            log::error!("Failed to save regexes: {:?}", e);
         }
 
         let gl_window = ctx.dis.gl_window();
@@ -202,17 +224,4 @@ impl Application for TF2BotKicker {
     }
 
     fn handle_event(&mut self, _: &mut Context, _: &egui_winit::winit::event::Event<()>) {}
-}
-
-pub fn append_line(data: &str, target: &str) {
-    let mut file = OpenOptions::new()
-        .write(true)
-        .append(true)
-        .create(true)
-        .open(target)
-        .expect(&format!("Failed to Open or Write to {}", target));
-
-    if let Err(_) = write!(file, "\n{}", data) {
-        log::error!("Failed to open or write to {}", target);
-    }
 }

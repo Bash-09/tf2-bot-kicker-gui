@@ -67,7 +67,7 @@ pub struct Player {
     pub team: Team,
     pub state: PlayerState,
     pub player_type: PlayerType,
-    pub notes: Option<String>,
+    pub notes: String,
 
     pub accounted: bool,
     pub stolen_name: bool,

@@ -2,8 +2,8 @@
 
 use std::collections::HashMap;
 use std::error::Error;
-use std::fs::File;
-use std::io::Read;
+use std::fs::{File, OpenOptions};
+use std::io::{LineWriter, Read, Write};
 use std::path::Path;
 
 use regex::Regex;
@@ -13,16 +13,18 @@ use crate::server::player::PlayerType;
 
 use super::player::Player;
 
+pub const REGEX_LIST: &'static str = "cfg/regx.txt";
+pub const PLAYER_LIST: &'static str = "cfg/playerlist.json";
+
 #[derive(Debug, Serialize, Clone)]
 pub struct PlayerRecord {
     pub steamid: String,
     pub player_type: PlayerType,
-    pub notes: Option<String>,
+    pub notes: String,
 }
 
 pub struct PlayerChecker {
     pub bots_regx: Vec<Regex>,
-
     pub players: HashMap<String, PlayerRecord>,
 }
 
@@ -46,12 +48,10 @@ impl PlayerChecker {
                 player.player_type = PlayerType::Bot;
 
                 let note = format!("Matched bot regex: {}", regx.as_str());
-                if let Some(notes) = &mut player.notes {
-                    notes.push('\n');
-                    notes.push_str(&note);
-                } else {
-                    player.notes = Some(note);
+                if !player.notes.is_empty() {
+                    player.notes.push('\n');
                 }
+                player.notes.push_str(&note);
 
                 self.update_player(player);
                 return true;
@@ -83,16 +83,6 @@ impl PlayerChecker {
         self.players.insert(player.steamid.clone(), player);
     }
 
-    /// Removes the player from the saved record of players
-    pub fn remove_player(&mut self, steamid: &str) {
-        self.players.remove(steamid);
-    }
-
-    /// Saves a new regex to match bots against
-    pub fn append_regex(&mut self, reg: Regex) {
-        self.bots_regx.push(reg);
-    }
-
     /// Import all players' steamID from the provided file as a particular player type
     pub fn read_from_steamid_list(
         &mut self,
@@ -104,12 +94,7 @@ impl PlayerChecker {
         let mut file = File::open(filename)?;
 
         let mut contents: String = String::new();
-        file.read_to_string(&mut contents).unwrap_or_else(|_| {
-            panic!(
-                "Failed to read file cfg/{} for bot configuration.",
-                filename
-            )
-        });
+        file.read_to_string(&mut contents)?;
 
         for m in reg.find_iter(&contents) {
             match reg.captures(m.as_str()) {
@@ -123,10 +108,10 @@ impl PlayerChecker {
                         let record = PlayerRecord {
                             steamid,
                             player_type: as_player_type,
-                            notes: Some(format!(
+                            notes: format!(
                                 "Imported from {} as {:?}",
                                 filename, as_player_type
-                            )),
+                            ),
                         };
                         self.players.insert(record.steamid.clone(), record);
                     }
@@ -158,6 +143,23 @@ impl PlayerChecker {
         }
 
         self.bots_regx.append(&mut list);
+        Ok(())
+    }
+
+    pub fn save_regex<P: AsRef<Path>>(&self, file: P) -> std::io::Result<()> {
+        let file = OpenOptions::new()
+            .write(true)
+            .append(false)
+            .create(true)
+            .open(file)?;
+        let mut writer = LineWriter::new(file);
+
+        for r in &self.bots_regx {
+            writer.write_all(r.as_str().as_bytes())?;
+            writer.write_all("\n".as_bytes())?;
+        }
+        writer.flush()?;
+
         Ok(())
     }
 
@@ -194,16 +196,10 @@ impl PlayerChecker {
                 _ => continue,
             };
 
-            let notes = if notes.is_empty() {
-                None
-            } else {
-                Some(notes.to_string())
-            };
-
             let record = PlayerRecord {
                 steamid: steamid.to_string(),
                 player_type,
-                notes: notes,
+                notes: notes.to_string(),
             };
 
             self.players.insert(steamid.to_string(), record);

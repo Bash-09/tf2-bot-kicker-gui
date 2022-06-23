@@ -31,3 +31,4 @@ regex = "1.5.4"
 
 log = "*"
 env_logger = "*"
+image = "0.24.2"

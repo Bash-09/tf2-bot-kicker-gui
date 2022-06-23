@@ -1,8 +1,6 @@
 use json::JsonValue;
 use serde::{Deserialize, Serialize};
 
-pub const DEFAULT_REGEX_LIST: &str = "cfg/regx.txt";
-
 #[derive(Serialize, Deserialize, Debug)]
 pub struct WindowState {
     pub width: u32,
@@ -31,12 +29,7 @@ pub struct Settings {
     pub rcon_password: String,
     pub tf2_directory: String,
 
-    pub save_bots: bool,
     pub mark_name_stealers: bool,
-
-    pub regex_list: String,
-
-    pub regex_lists: Vec<String>,
 }
 
 impl Settings {
@@ -65,11 +58,7 @@ impl Settings {
             rcon_password: String::from("tf2bk"),
             tf2_directory: String::new(),
 
-            save_bots: true,
             mark_name_stealers: true,
-
-            regex_list: String::from(DEFAULT_REGEX_LIST),
-            regex_lists: vec![DEFAULT_REGEX_LIST.to_string()],
         }
     }
 
@@ -98,8 +87,12 @@ impl Settings {
         set.user = json["user"].as_str().unwrap_or(&set.user).to_string();
 
         set.announce_bots = json["announce_bots"].as_bool().unwrap_or(set.announce_bots);
-        set.announce_cheaters = json["announce_cheaters"].as_bool().unwrap_or(set.announce_cheaters);
-        set.announce_namesteal = json["announce_namesteal"].as_bool().unwrap_or(set.announce_namesteal);
+        set.announce_cheaters = json["announce_cheaters"]
+            .as_bool()
+            .unwrap_or(set.announce_cheaters);
+        set.announce_namesteal = json["announce_namesteal"]
+            .as_bool()
+            .unwrap_or(set.announce_namesteal);
 
         set.kick_bots = json["kick_bots"].as_bool().unwrap_or(set.kick_bots);
         set.kick_cheaters = json["kick_cheaters"].as_bool().unwrap_or(set.kick_cheaters);
@@ -119,27 +112,9 @@ impl Settings {
             .unwrap_or(&set.tf2_directory)
             .to_string();
 
-        set.save_bots = json["save_bots"]
-            .as_bool()
-            .unwrap_or(set.save_bots);
-
         set.mark_name_stealers = json["mark_name_stealers"]
             .as_bool()
             .unwrap_or(set.mark_name_stealers);
-
-        set.regex_list = json["regex_list"]
-            .as_str()
-            .unwrap_or(&set.regex_list)
-            .to_string();
-
-        if json["regex_lists"].is_array() {
-            set.regex_lists.clear();
-            for i in json["regex_lists"].members() {
-                if let Some(list) = i.as_str() {
-                    set.regex_lists.push(list.to_string());
-                }
-            }
-        }
 
         Ok(set)
     }

@@ -3,7 +3,7 @@ use regex::Regex;
 use crate::{
     command_manager::{self, CommandManager},
     logwatcher::LogWatcher,
-    player_checker::PlayerChecker,
+    player_checker::{PlayerChecker, PLAYER_LIST, REGEX_LIST},
     regexes::{
         fn_lobby, fn_status, fn_user_disconnect, LogMatcher, REGEX_LOBBY, REGEX_STATUS,
         REGEX_USER_DISCONNECTED,
@@ -59,7 +59,7 @@ impl State {
 
         // Create player checker and load any regexes and players saved
         let mut player_checker = PlayerChecker::new();
-        match player_checker.read_players("cfg/players.json") {
+        match player_checker.read_players(PLAYER_LIST) {
             Ok(()) => {
                 log::info!("Loaded playerlist");
             }
@@ -67,13 +67,11 @@ impl State {
                 log::error!("Failed to read playlist: {:?}", e);
             }
         }
-        for regex_list in &settings.regex_lists {
-            match player_checker.read_regex_list(regex_list) {
-                Ok(_) => {}
-                Err(e) => {
-                    message = format!("Error loading {}: {}", regex_list, e);
-                    log::error!("{}", message);
-                }
+        match player_checker.read_regex_list(REGEX_LIST) {
+            Ok(_) => {}
+            Err(e) => {
+                message = format!("Error loading {}: {}", REGEX_LIST, e);
+                log::error!("{}", message);
             }
         }
 

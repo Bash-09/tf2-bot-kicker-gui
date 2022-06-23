@@ -1,7 +1,7 @@
 #![allow(non_upper_case_globals)]
 #![allow(unused_variables)]
 
-use crate::{server::*, command_manager::CommandManager};
+use crate::{command_manager::CommandManager, server::*};
 
 use regex::{Captures, Regex};
 
@@ -17,7 +17,7 @@ pub struct LogMatcher {
         caps: Captures,
         set: &Settings,
         bot_checker: &mut PlayerChecker,
-        cmd: &mut CommandManager
+        cmd: &mut CommandManager,
     ),
 }
 
@@ -30,7 +30,7 @@ impl LogMatcher {
             caps: Captures,
             set: &Settings,
             bot_checker: &mut PlayerChecker,
-            cmd: &mut CommandManager
+            cmd: &mut CommandManager,
         ),
     ) -> LogMatcher {
         LogMatcher { r, f }
@@ -59,7 +59,7 @@ pub fn fn_status(
     caps: Captures,
     settings: &Settings,
     player_checker: &mut PlayerChecker,
-    cmd: &mut CommandManager
+    cmd: &mut CommandManager,
 ) {
     let steamid = caps[3].to_string();
 
@@ -89,21 +89,23 @@ pub fn fn_status(
         p.stolen_name = stolen_name;
 
         if p.name != name {
+            log::debug!("Different name! {}, {}", &p.name, &name);
+
             player_checker.check_player_name(p);
             p.name = name;
 
-            if p.stolen_name && settings.announce_namesteal && p.time < settings.alert_period as u32 {
+            // Handle name stealing
+            if p.stolen_name && settings.announce_namesteal {
                 cmd.send_chat(&format!("A bot has stolen {}'s name.", &p.name));
             }
-            if p.stolen_name && settings.mark_name_stealers {
+            if p.stolen_name && settings.mark_name_stealers && p.player_type == PlayerType::Player {
                 p.player_type = PlayerType::Bot;
 
-                if let Some(notes) = &mut p.notes {
-                    notes.push_str("\nAutomatically marked as name-stealing bot.");
-                } else {
-                    p.notes = Some(String::from("Automatically marked as name-stealing bot."));
-                    player_checker.update_player(&p);
+                if !p.notes.is_empty() {
+                    p.notes.push('\n');
                 }
+                p.notes.push_str("Automatically marked as name-stealing bot.");
+                player_checker.update_player(&p);
             }
         }
 
@@ -118,7 +120,7 @@ pub fn fn_status(
             team: Team::None,
             state: player_state,
             player_type: PlayerType::Player,
-            notes: None,
+            notes: String::new(),
 
             accounted: true,
             stolen_name,
@@ -130,11 +132,17 @@ pub fn fn_status(
             log::info!("Unknown {:?} joining: {}", p.player_type, p.name);
         }
 
-        if stolen_name && settings.announce_namesteal {
+        // Handle name stealing
+        if stolen_name && settings.announce_namesteal && p.time < settings.refresh_period as u32 {
             cmd.send_chat(&format!("A bot has stolen {}'s name.", &p.name));
         }
-        if stolen_name && settings.mark_name_stealers {
-            p.notes = Some(String::from("Automatically marked as name-stealing bot."));
+        if p.stolen_name && settings.mark_name_stealers && p.player_type == PlayerType::Player {
+            p.player_type = PlayerType::Bot;
+
+            if !p.notes.is_empty() {
+                p.notes.push('\n');
+            }
+            p.notes.push_str("Automatically marked as name-stealing bot.");
             player_checker.update_player(&p);
         }
 
@@ -175,7 +183,7 @@ pub fn fn_lobby(
     caps: Captures,
     set: &Settings,
     bot_checker: &mut PlayerChecker,
-    cmd: &mut CommandManager
+    cmd: &mut CommandManager,
 ) {
     let mut team = Team::None;
 
@@ -201,7 +209,7 @@ pub fn fn_user_disconnect(
     caps: Captures,
     set: &Settings,
     bot_checker: &mut PlayerChecker,
-    cmd: &mut CommandManager
+    cmd: &mut CommandManager,
 ) {
     serv.clear();
 }

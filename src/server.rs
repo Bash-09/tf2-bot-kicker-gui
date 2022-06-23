@@ -117,19 +117,25 @@ impl Server {
         // Get all illegitimate accounts
         let mut accounts: Vec<&Player> = Vec::new();
         for p in self.players.values().into_iter() {
-            if p.time > settings.alert_period as u32 {continue}
+            if p.time > settings.alert_period as u32 {
+                continue;
+            }
 
             match p.player_type {
                 PlayerType::Player => continue,
                 PlayerType::Bot => {
-                    if !settings.announce_bots {continue}
+                    if !settings.announce_bots {
+                        continue;
+                    }
                     accounts.push(p);
                     bots = true;
                     invaders |= p.team == Team::Invaders;
                     defenders |= p.team == Team::Defenders;
-                },
+                }
                 PlayerType::Cheater => {
-                    if !settings.announce_cheaters {continue}
+                    if !settings.announce_cheaters {
+                        continue;
+                    }
                     accounts.push(p);
                     cheaters = true;
                     invaders |= p.team == Team::Invaders;
@@ -138,7 +144,9 @@ impl Server {
             }
         }
 
-        if accounts.is_empty() {return}
+        if accounts.is_empty() {
+            return;
+        }
 
         // Players joining
         if bots && cheaters {
@@ -154,12 +162,14 @@ impl Server {
             Some(user) => {
                 if (invaders && defenders) || user.team == Team::None {
                     message.push_str("the server: ");
-                } else if (invaders && user.team == Team::Invaders) || (defenders && user.team == Team::Defenders) {
+                } else if (invaders && user.team == Team::Invaders)
+                    || (defenders && user.team == Team::Defenders)
+                {
                     message.push_str("our team: ");
                 } else {
                     message.push_str("the enemy team: ");
                 }
-            },
+            }
             None => {
                 message.push_str("the server: ");
             }
