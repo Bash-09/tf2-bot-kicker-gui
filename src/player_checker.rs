@@ -150,7 +150,6 @@ impl PlayerChecker {
             .create(true)
             .open(file)?;
         let mut writer = LineWriter::new(file);
-
         for r in &self.bots_regx {
             writer.write_all(r.as_str().as_bytes())?;
             writer.write_all("\n".as_bytes())?;

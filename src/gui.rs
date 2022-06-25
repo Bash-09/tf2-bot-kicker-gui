@@ -98,7 +98,11 @@ pub fn render(
                 }
 
                 if ui.button("Import regex list").clicked() {
-                    todo!("Import regex lsit");
+                    if let Some(pb) = rfd::FileDialog::new().set_directory("cfg").pick_file() {
+                        if let Err(e) = state.player_checker.read_regex_list(pb) {
+                            log::error!("Failed to import regexes: {:?}", e);
+                        }
+                    }
                 }
             });
 
