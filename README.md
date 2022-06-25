@@ -56,7 +56,7 @@ Any saved regexes or players can be accessed/added/editted/deleted from the `Sav
 
 ## Account identification
 
-A list of accounts is stored in `cfg/playerlist.json` containing the SteamID, player type (Player/Bot/Cheater) and any recorded notes for that account. When players join the server their steamid is matched against this list to determine if they are a bot or cheater and will take appropriate action (send chat messages, kick, or just you). If they are not a know account their name will be checked against a list of regexes in case they have a common bot name (e.g. DoesHotter).
+A list of accounts is stored in `cfg/playerlist.json` containing the SteamID, player type (Player/Bot/Cheater) and any recorded notes for that account. When players join the server their steamid is matched against this list to determine if they are a bot or cheater and will take appropriate action (send chat messages, kick, etc). If they are not a know account their name will be checked against a list of regexes in case they have a common bot name (e.g. DoesHotter).
 
 # Building
 This program should build without issue through Cargo on Windows. 
