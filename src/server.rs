@@ -18,17 +18,20 @@ pub const COM_LOBBY: &str = "tf_lobby_debug";
 
 pub struct Server {
     pub players: HashMap<String, Player>,
+    pub new_connections: Vec<String>,
 }
 
 impl Server {
     pub fn new() -> Server {
         Server {
             players: HashMap::with_capacity(24),
+            new_connections: Vec::new(),
         }
     }
 
     pub fn clear(&mut self) {
         self.players.clear();
+        self.new_connections.clear();
     }
 
     pub fn get_bots(&self) -> Vec<&Player> {
@@ -101,7 +104,22 @@ impl Server {
         });
     }
 
-    pub fn send_chat_messages(&self, settings: &Settings, cmd: &mut CommandManager) {
+    pub fn send_chat_messages(&mut self, settings: &Settings, cmd: &mut CommandManager) {
+        self.new_connections.retain(|steamid| {
+            if let Some(p) = self.players.get(steamid) {
+                if !(settings.announce_bots && p.player_type == PlayerType::Bot) && !(settings.announce_cheaters && p.player_type == PlayerType::Cheater) {
+                    return false;
+                }
+
+                if p.time > settings.alert_period.ceil() as u32 {
+                    return false;
+                }
+
+                return true;
+            } 
+            return false;
+        });
+
         if !settings.announce_bots && !settings.announce_cheaters {
             return;
         }
@@ -114,37 +132,37 @@ impl Server {
         let mut invaders = false;
         let mut defenders = false;
 
-        // Get all illegitimate accounts
-        let mut accounts: Vec<&Player> = Vec::new();
-        for p in self.players.values().into_iter() {
-            if p.time > settings.alert_period as u32 {
-                continue;
-            }
+        // Get all newly connected illegitimate accounts
+        for steamid in &self.new_connections {
+            if let Some(p) = self.players.get(steamid) {
 
-            match p.player_type {
-                PlayerType::Player => continue,
-                PlayerType::Bot => {
-                    if !settings.announce_bots {
-                        continue;
-                    }
-                    accounts.push(p);
-                    bots = true;
-                    invaders |= p.team == Team::Invaders;
-                    defenders |= p.team == Team::Defenders;
+                if p.time as u32 > settings.alert_period as u32 {
+                    continue;
                 }
-                PlayerType::Cheater => {
-                    if !settings.announce_cheaters {
-                        continue;
+
+                match p.player_type {
+                    PlayerType::Bot => {
+                        if !settings.announce_bots {
+                            continue;
+                        }
+                        bots = true;
+                        invaders |= p.team == Team::Invaders;
+                        defenders |= p.team == Team::Defenders;
                     }
-                    accounts.push(p);
-                    cheaters = true;
-                    invaders |= p.team == Team::Invaders;
-                    defenders |= p.team == Team::Defenders;
+                    PlayerType::Cheater => {
+                        if !settings.announce_cheaters {
+                            continue;
+                        }
+                        cheaters = true;
+                        invaders |= p.team == Team::Invaders;
+                        defenders |= p.team == Team::Defenders;
+                    },
+                    _ => {},
                 }
             }
         }
 
-        if accounts.is_empty() {
+        if self.new_connections.is_empty() {
             return;
         }
 
@@ -176,10 +194,9 @@ impl Server {
         }
 
         // Player names
-        let mut account_peekable = accounts.into_iter().peekable();
-        while let Some(account) = account_peekable.next() {
-            log::debug!("Bot time: {}", account.time);
-
+        let mut account_peekable = self.new_connections.iter().peekable();
+        while let Some(steamid) = account_peekable.next() {
+            let account = self.players.get(steamid).unwrap();
             message.push_str(&account.name);
 
             if account_peekable.peek().is_some() {
@@ -191,5 +208,6 @@ impl Server {
 
         // Send message
         cmd.send_chat(&message);
+        self.new_connections.clear();
     }
 }

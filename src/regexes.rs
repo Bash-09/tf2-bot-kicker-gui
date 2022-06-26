@@ -83,6 +83,7 @@ pub fn fn_status(
 
     // Update an existing player
     if let Some(p) = server.players.get_mut(&steamid) {
+        p.userid = caps[1].to_string();
         p.time = time;
         p.state = player_state;
         p.accounted = true;
@@ -148,6 +149,7 @@ pub fn fn_status(
             player_checker.update_player(&p);
         }
 
+        server.new_connections.push(p.steamid.clone());
         server.players.insert(p.steamid.clone(), p);
     }
 }
