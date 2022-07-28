@@ -1,3 +1,5 @@
+#![feature(hash_drain_filter)]
+
 extern crate chrono;
 extern crate env_logger;
 extern crate rfd;
@@ -7,6 +9,7 @@ pub mod command_manager;
 pub mod gui;
 pub mod logwatcher;
 pub mod player_checker;
+pub mod ringbuffer;
 pub mod server;
 pub mod settings;
 pub mod state;
@@ -128,33 +131,29 @@ impl Application for TF2BotKicker {
         match &mut state.log {
             Some(lw) => {
                 // If there is a loaded dir, process any new console lines
-                loop {
-                    if let Some(line) = lw.next_line() {
-                        if let Some(c) = state.regx_disconnect.r.captures(&line) {
-                            (state.regx_disconnect.f)(
-                                &mut state.server,
-                                &line,
-                                c,
-                                &state.settings,
-                                &mut state.player_checker,
-                                &mut self.cmd,
-                            );
-                            continue;
-                        }
+                while let Some(line) = lw.next_line() {
+                    if let Some(c) = state.regx_disconnect.r.captures(&line) {
+                        (state.regx_disconnect.f)(
+                            &mut state.server,
+                            &line,
+                            c,
+                            &state.settings,
+                            &mut state.player_checker,
+                            &mut self.cmd,
+                        );
+                        continue;
+                    }
 
-                        if let Some(c) = state.regx_status.r.captures(&line) {
-                            (state.regx_status.f)(
-                                &mut state.server,
-                                &line,
-                                c,
-                                &state.settings,
-                                &mut state.player_checker,
-                                &mut self.cmd,
-                            );
-                            continue;
-                        }
-                    } else {
-                        break;
+                    if let Some(c) = state.regx_status.r.captures(&line) {
+                        (state.regx_status.f)(
+                            &mut state.server,
+                            &line,
+                            c,
+                            &state.settings,
+                            &mut state.player_checker,
+                            &mut self.cmd,
+                        );
+                        continue;
                     }
                 }
             }
@@ -162,26 +161,19 @@ impl Application for TF2BotKicker {
         }
 
         // Kick Bots
-        if state.kick_timer.update() {
-            state
-                .server
-                .kick_players_of_type(&state.settings, &mut self.cmd, PlayerType::Bot);
-        }
+        if !state.settings.paused {
+            if state.kick_timer.update() {
+                state
+                    .server
+                    .kick_players_of_type(&state.settings, &mut self.cmd, PlayerType::Bot);
+            }
 
-        if state.alert_timer.update() {
-            state
-                .server
-                .send_chat_messages(&state.settings, &mut self.cmd);
+            if state.alert_timer.update() {
+                state
+                    .server
+                    .send_chat_messages(&state.settings, &mut self.cmd);
+            }
         }
-
-        // Send chat alerts
-        // if state.alert_timer.update() {
-        //     if state.rcon_connected() {
-        //         state
-        //             .server
-        //             .announce_bots(&state.settings, state.rcon.as_mut().unwrap());
-        //     }
-        // }
 
         let mut target = ctx.dis.draw();
 
@@ -190,7 +182,7 @@ impl Application for TF2BotKicker {
             windows.render(state, gui_ctx);
         });
 
-        ctx.gui.paint(&mut ctx.dis, &mut target);
+        ctx.gui.paint(&ctx.dis, &mut target);
         target.finish().unwrap();
     }
 

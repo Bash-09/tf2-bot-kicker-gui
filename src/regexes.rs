@@ -107,7 +107,7 @@ pub fn fn_status(
                 }
                 p.notes
                     .push_str("Automatically marked as name-stealing bot.");
-                player_checker.update_player(&p);
+                player_checker.update_player(p);
             }
         }
 
@@ -218,7 +218,7 @@ pub fn fn_user_disconnect(
     serv.clear();
 }
 
-const INVIS_CHARS: &'static [char] = &[
+const INVIS_CHARS: &[char] = &[
     '\u{00a0}',
     '\u{00ad}',
     '\u{034f}',

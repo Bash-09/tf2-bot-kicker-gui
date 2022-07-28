@@ -1,12 +1,16 @@
 use std::error::Error;
 
 use clipboard::{ClipboardContext, ClipboardProvider};
-use egui::{Id, RichText, SelectableLabel, Vec2, Label};
+use egui::{Color32, Id, Label, RichText, SelectableLabel, Vec2};
 use glium_app::utils::persistent_window::PersistentWindow;
 
 use crate::{
-    player_checker::PlayerRecord, server::player::PlayerType, state::State,
+    player_checker::PlayerRecord,
+    server::player::{PlayerState, PlayerType},
+    state::State,
 };
+
+use super::{format_time, player_type_combobox, truncate, TRUNC_LEN};
 
 pub fn view_players_window() -> PersistentWindow<State> {
     enum Action {
@@ -45,6 +49,7 @@ pub fn view_players_window() -> PersistentWindow<State> {
                         };
 
                         ui.label("Filter");
+
                         egui::ComboBox::new("Saved Players", "")
                             .selected_text(text)
                             .show_ui(ui, |ui| {
@@ -52,17 +57,22 @@ pub fn view_players_window() -> PersistentWindow<State> {
                                 ui.selectable_value(
                                     &mut filter,
                                     Some(PlayerType::Player),
-                                    RichText::new("Player").color(PlayerType::Player.color(ui)),
+                                    PlayerType::Player.rich_text(),
                                 );
                                 ui.selectable_value(
                                     &mut filter,
                                     Some(PlayerType::Bot),
-                                    RichText::new("Bot").color(PlayerType::Bot.color(ui)),
+                                    PlayerType::Bot.rich_text(),
                                 );
                                 ui.selectable_value(
                                     &mut filter,
                                     Some(PlayerType::Cheater),
-                                    RichText::new("Cheater").color(PlayerType::Cheater.color(ui)),
+                                    PlayerType::Cheater.rich_text(),
+                                );
+                                ui.selectable_value(
+                                    &mut filter,
+                                    Some(PlayerType::Suspicious),
+                                    PlayerType::Suspicious.rich_text(),
                                 );
                             });
 
@@ -99,7 +109,13 @@ pub fn view_players_window() -> PersistentWindow<State> {
                                     action = Some(Action::Edit(p.steamid.clone()));
                                 }
 
-                                ui.add_sized(Vec2::new(50.0, 20.0), Label::new(RichText::new(&format!("{:?}", p.player_type)).color(p.player_type.color(ui))));
+                                ui.add_sized(
+                                    Vec2::new(50.0, 20.0),
+                                    Label::new(
+                                        RichText::new(&format!("{:?}", p.player_type))
+                                            .color(p.player_type.color(ui)),
+                                    ),
+                                );
 
                                 let steamid_response = ui.add_sized(
                                     Vec2::new(100.0, 20.0),
@@ -150,42 +166,123 @@ pub fn edit_player_window(mut record: PlayerRecord) -> PersistentWindow<State> {
                         .on_hover_text("SteamID3 has the format U:1:xxxxxxx");
                     ui.text_edit_singleline(&mut record.steamid);
                 });
+
                 ui.horizontal(|ui| {
                     ui.label("Player Type");
-                    egui::ComboBox::new("Editing player", "")
-                        .selected_text(
-                            RichText::new(format!("{:?}", record.player_type))
-                                .color(record.player_type.color(ui)),
-                        )
-                        .show_ui(ui, |ui| {
-                            ui.selectable_value(
-                                &mut record.player_type,
-                                PlayerType::Player,
-                                RichText::new("Player").color(PlayerType::Player.color(ui)),
-                            );
-                            ui.selectable_value(
-                                &mut record.player_type,
-                                PlayerType::Bot,
-                                RichText::new("Bot").color(PlayerType::Bot.color(ui)),
-                            );
-                            ui.selectable_value(
-                                &mut record.player_type,
-                                PlayerType::Cheater,
-                                RichText::new("Cheater").color(PlayerType::Cheater.color(ui)),
-                            );
-                        });
+                    player_type_combobox("Editing Player", &mut record.player_type, ui);
                 });
+
                 ui.text_edit_multiline(&mut record.notes);
                 if ui.button("Save").clicked() {
                     saved = true;
                     state.player_checker.update_player_record(record.clone());
+
+                    // Update current server record
                     if let Some(p) = state.server.players.get_mut(&record.steamid) {
-                        p.player_type = record.player_type.clone();
+                        p.player_type = record.player_type;
+                        p.notes = record.notes.clone();
+                    }
+
+                    // Update previous players record
+                    for p in state.server.previous_players.inner_mut() {
+                        if p.steamid != record.steamid {
+                            continue;
+                        }
+
+                        p.player_type = record.player_type;
                         p.notes = record.notes.clone();
                     }
                 }
             });
 
         open & !saved
+    }))
+}
+
+pub fn recent_players_window() -> PersistentWindow<State> {
+    PersistentWindow::new(Box::new(move |id, windows, gui_ctx, state| {
+        let mut open = true;
+
+        egui::Window::new("Recent Players")
+            .id(Id::new(id))
+            .open(&mut open)
+            .collapsible(true)
+            .show(gui_ctx, |ui| {
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    let width = 500.0;
+                    ui.set_width(width);
+
+                    // Render players
+                    for player in state.server.previous_players.inner() {
+                        ui.horizontal(|ui| {
+                            ui.set_width(width);
+
+                            let text;
+                            if player.steamid == state.settings.user {
+                                text = egui::RichText::new(truncate(&player.name, TRUNC_LEN))
+                                    .color(Color32::GREEN);
+                            } else if player.player_type == PlayerType::Bot
+                                || player.player_type == PlayerType::Cheater
+                            {
+                                text = egui::RichText::new(truncate(&player.name, TRUNC_LEN))
+                                    .color(player.player_type.color(ui));
+                            } else if player.stolen_name {
+                                text = egui::RichText::new(truncate(&player.name, TRUNC_LEN))
+                                    .color(Color32::YELLOW);
+                            } else {
+                                text = egui::RichText::new(truncate(&player.name, TRUNC_LEN));
+                            }
+
+                            let header = ui.selectable_label(false, text);
+
+                            if header.clicked() {
+                                windows.push(edit_player_window(player.get_record()));
+                            }
+
+                            // Notes / Stolen name warning
+                            if player.stolen_name || !player.notes.is_empty() {
+                                header.on_hover_ui(|ui| {
+                                    if player.stolen_name {
+                                        ui.label(
+                                            RichText::new(
+                                                "A player with this name is already on the server.",
+                                            )
+                                            .color(Color32::YELLOW),
+                                        );
+                                    }
+                                    if !player.notes.is_empty() {
+                                        ui.label(&player.notes);
+                                    }
+                                });
+                            }
+
+                            // Cheater, Bot and Joining labels
+                            ui.with_layout(egui::Layout::right_to_left(), |ui| {
+                                ui.horizontal(|ui| {
+                                    ui.add_space(15.0);
+
+                                    // Time
+                                    ui.label(&format_time(player.time));
+
+                                    if !player.notes.is_empty() {
+                                        ui.label("☑");
+                                    }
+
+                                    // Cheater / Bot / Joining
+                                    if player.player_type != PlayerType::Player {
+                                        ui.add(Label::new(player.player_type.rich_text()));
+                                    }
+                                    if player.state == PlayerState::Spawning {
+                                        ui.add(Label::new(
+                                            RichText::new("Joining").color(Color32::YELLOW),
+                                        ));
+                                    }
+                                });
+                            });
+                        });
+                    }
+                });
+            });
+        open
     }))
 }

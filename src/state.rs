@@ -36,11 +36,15 @@ impl State {
 
         // Attempt to load settings, create new default settings if it can't load an existing file
         let set = Settings::import("cfg/settings.json");
-        if set.is_err() {
-            settings = Settings::new();
-            log::warn!("{}", format!("Error loading settings: {}", set.unwrap_err()));
+
+        if let Ok(set) = set {
+            settings = set;
         } else {
-            settings = set.unwrap();
+            settings = Settings::new();
+            log::warn!(
+                "{}",
+                format!("Error loading settings: {}", set.unwrap_err())
+            );
         }
 
         // Load regexes

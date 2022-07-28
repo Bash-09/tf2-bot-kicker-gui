@@ -1,6 +1,6 @@
 use core::fmt;
 
-use egui::{Color32, Ui};
+use egui::{Color32, RichText, Ui};
 use serde::Serialize;
 
 use crate::player_checker::PlayerRecord;
@@ -17,6 +17,7 @@ pub enum PlayerType {
     Player,
     Bot,
     Cheater,
+    Suspicious,
 }
 
 impl PlayerType {
@@ -26,18 +27,28 @@ impl PlayerType {
             Player => ui.visuals().text_color(),
             Bot => Color32::RED,
             Cheater => Color32::from_rgb(255, 165, 0),
+            Suspicious => Color32::LIGHT_RED,
+        }
+    }
+
+    pub fn rich_text(&self) -> RichText {
+        use PlayerType::*;
+        match self {
+            Player => RichText::new("Player"),
+            Bot => RichText::new("Bot").color(Color32::RED),
+            Cheater => RichText::new("Cheater").color(Color32::from_rgb(255, 165, 0)),
+            Suspicious => RichText::new("Suspicious").color(Color32::LIGHT_RED),
         }
     }
 }
 
 impl std::fmt::Display for Team {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let out: &str;
-        match self {
-            Team::Defenders => out = "DEF ",
-            Team::Invaders => out = "INV ",
-            Team::None => out = "NONE",
-        }
+        let out: &str = match self {
+            Team::Defenders => "DEF ",
+            Team::Invaders => "INV ",
+            Team::None => "NONE",
+        };
         write!(f, "{}", out)
     }
 }
@@ -50,11 +61,10 @@ pub enum PlayerState {
 
 impl std::fmt::Display for PlayerState {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let out: &str;
-        match self {
-            PlayerState::Active => out = "Active  ",
-            PlayerState::Spawning => out = "Spawning",
-        }
+        let out: &str = match self {
+            PlayerState::Active => "Active  ",
+            PlayerState::Spawning => "Spawning",
+        };
         write!(f, "{}", out)
     }
 }

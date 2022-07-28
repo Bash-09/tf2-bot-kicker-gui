@@ -13,8 +13,8 @@ use crate::server::player::PlayerType;
 
 use super::player::Player;
 
-pub const REGEX_LIST: &'static str = "cfg/regx.txt";
-pub const PLAYER_LIST: &'static str = "cfg/playerlist.json";
+pub const REGEX_LIST: &str = "cfg/regx.txt";
+pub const PLAYER_LIST: &str = "cfg/playerlist.json";
 
 #[derive(Debug, Serialize, Clone)]
 pub struct PlayerRecord {
@@ -75,12 +75,15 @@ impl PlayerChecker {
 
     /// Inserts the player into the saved record of players
     pub fn update_player(&mut self, player: &Player) {
-        self.players
-            .insert(player.steamid.clone(), player.get_record());
+        self.update_player_record(player.get_record());
     }
 
     pub fn update_player_record(&mut self, player: PlayerRecord) {
-        self.players.insert(player.steamid.clone(), player);
+        if player.player_type == PlayerType::Player && player.notes.is_empty() {
+            self.players.remove(&player.steamid);
+        } else {
+            self.players.insert(player.steamid.clone(), player);
+        }
     }
 
     /// Import all players' steamID from the provided file as a particular player type
@@ -182,7 +185,7 @@ impl PlayerChecker {
             let player_type = p["player_type"].as_str().unwrap_or("");
             let notes = p["notes"].as_str().unwrap_or("");
 
-            if steamid == "" {
+            if steamid.is_empty() {
                 continue;
             }
             let player_type = match player_type {

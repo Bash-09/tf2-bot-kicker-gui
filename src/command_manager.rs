@@ -67,10 +67,10 @@ impl CommandManager {
 
     pub fn kick_player(&mut self, player_userid: &str) -> Option<String> {
         let command = format!("callvote kick \"{}\"", player_userid);
-        return self.run_command(&command);
+        self.run_command(&command)
     }
 
     pub fn send_chat(&mut self, message: &str) -> Option<String> {
-        return self.run_command(&format!("say \"{}\"", message));
+        self.run_command(&format!("say \"{}\"", message))
     }
 }

@@ -74,7 +74,7 @@ impl LogWatcher {
                     self.pos += len as u64;
                     self.reader.seek(SeekFrom::Start(self.pos)).unwrap();
                     self.last_activity = SystemTime::now();
-                    return Some(line.replace("\n", ""));
+                    return Some(line.replace('\n', ""));
                 }
 
                 // Check if file has been shortened

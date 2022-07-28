@@ -7,6 +7,7 @@ use player::Player;
 use player::PlayerState;
 
 use crate::command_manager::CommandManager;
+use crate::ringbuffer::RingBuffer;
 
 use self::player::PlayerType;
 use self::player::Team;
@@ -19,6 +20,7 @@ pub const COM_LOBBY: &str = "tf_lobby_debug";
 pub struct Server {
     pub players: HashMap<String, Player>,
     pub new_connections: Vec<String>,
+    pub previous_players: RingBuffer<Player>,
 }
 
 impl Server {
@@ -26,6 +28,7 @@ impl Server {
         Server {
             players: HashMap::with_capacity(24),
             new_connections: Vec::new(),
+            previous_players: RingBuffer::new(48),
         }
     }
 
@@ -37,7 +40,7 @@ impl Server {
     pub fn get_bots(&self) -> Vec<&Player> {
         let mut bots: Vec<&Player> = Vec::new();
 
-        for p in self.players.values().into_iter() {
+        for p in self.players.values() {
             if p.player_type == PlayerType::Bot {
                 bots.push(p);
             }
@@ -51,23 +54,30 @@ impl Server {
     /// There is no way of knowing if a vote is in progress or the user is on cooldown so votes will still be attempted
     pub fn kick_players_of_type(
         &mut self,
-        set: &Settings,
+        settings: &Settings,
         cmd: &mut CommandManager,
         player_type: PlayerType,
     ) {
-        if cmd.connected(&set.rcon_password).is_err() {
+        if cmd.connected(&settings.rcon_password).is_err() {
             return;
         }
 
-        if !set.kick_bots {
+        if !settings.kick_bots {
             return;
         }
 
-        for p in self.players.values().into_iter() {
+        // Don't attempt to kick if too early
+        if let Some(user) = self.players.get(&settings.user) {
+            if user.time < 120 {
+                return;
+            }
+        }
+
+        for p in self.players.values() {
             if p.state != PlayerState::Active || !p.accounted || p.player_type != player_type {
                 continue;
             }
-            match self.players.get(&set.user) {
+            match self.players.get(&settings.user) {
                 Some(user) => {
                     if user.team == p.team {
                         cmd.kick_player(&p.userid);
@@ -84,7 +94,7 @@ impl Server {
     pub fn refresh(&mut self) {
         log::debug!("Refreshing server.");
 
-        for p in self.players.values_mut().into_iter() {
+        for p in self.players.values_mut() {
             p.accounted = false;
         }
     }
@@ -92,7 +102,7 @@ impl Server {
     /// Remove players who aren't present on the server anymore
     /// (This method will be called automatically in a rexes command)
     pub fn prune(&mut self) {
-        self.players.retain(|_, v| {
+        for (_, p) in self.players.drain_filter(|_, v| {
             if !v.accounted && v.player_type == PlayerType::Bot {
                 log::info!("Bot disconnected: {}", v.name);
             }
@@ -100,14 +110,20 @@ impl Server {
                 log::debug!("Player Pruned: {}", v.name);
             }
 
-            v.accounted
-        });
+            !v.accounted
+        }) {
+            log::info!("Pruning player {}", &p.name);
+            self.previous_players.push(p);
+        }
     }
 
     pub fn send_chat_messages(&mut self, settings: &Settings, cmd: &mut CommandManager) {
+        // Remove unwanted accounts from the list to announce
         self.new_connections.retain(|steamid| {
             if let Some(p) = self.players.get(steamid) {
-                if !(settings.announce_bots && p.player_type == PlayerType::Bot) && !(settings.announce_cheaters && p.player_type == PlayerType::Cheater) {
+                if !(settings.announce_bots && p.player_type == PlayerType::Bot)
+                    && !(settings.announce_cheaters && p.player_type == PlayerType::Cheater)
+                {
                     return false;
                 }
 
@@ -116,8 +132,8 @@ impl Server {
                 }
 
                 return true;
-            } 
-            return false;
+            }
+            false
         });
 
         if !settings.announce_bots && !settings.announce_cheaters {
@@ -135,7 +151,6 @@ impl Server {
         // Get all newly connected illegitimate accounts
         for steamid in &self.new_connections {
             if let Some(p) = self.players.get(steamid) {
-
                 if p.time as u32 > settings.alert_period as u32 {
                     continue;
                 }
@@ -156,8 +171,8 @@ impl Server {
                         cheaters = true;
                         invaders |= p.team == Team::Invaders;
                         defenders |= p.team == Team::Defenders;
-                    },
-                    _ => {},
+                    }
+                    _ => {}
                 }
             }
         }

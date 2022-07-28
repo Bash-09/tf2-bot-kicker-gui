@@ -26,6 +26,8 @@ pub struct Settings {
     pub kick_period: f32,
     pub alert_period: f32,
 
+    pub paused: bool,
+
     pub rcon_password: String,
     pub tf2_directory: String,
 
@@ -54,6 +56,8 @@ impl Settings {
             refresh_period: 10.0,
             kick_period: 10.0,
             alert_period: 20.0,
+
+            paused: false,
 
             rcon_password: String::from("tf2bk"),
             tf2_directory: String::new(),
@@ -103,6 +107,8 @@ impl Settings {
         set.kick_period = json["kick_period"].as_f32().unwrap_or(set.kick_period);
         set.alert_period = json["alert_period"].as_f32().unwrap_or(set.alert_period);
 
+        set.paused = json["paused"].as_bool().unwrap_or(set.paused);
+
         set.rcon_password = json["rcon_password"]
             .as_str()
             .unwrap_or(&set.rcon_password)
@@ -122,12 +128,12 @@ impl Settings {
     /// Directly serializes the object to JSON and attempts to write it to the specified file.
     pub fn export(&self) -> Result<(), Box<dyn std::error::Error>> {
         let _new_dir = std::fs::create_dir("cfg");
-        return match serde_json::to_string(self) {
+        match serde_json::to_string(self) {
             Ok(contents) => match std::fs::write("cfg/settings.json", &contents) {
                 Ok(_) => Ok(()),
                 Err(e) => Err(Box::new(e)),
             },
             Err(e) => Err(Box::new(e)),
-        };
+        }
     }
 }

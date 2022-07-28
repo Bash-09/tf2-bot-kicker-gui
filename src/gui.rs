@@ -28,22 +28,20 @@ pub fn render(
 ) {
     // Top menu bar
     egui::TopBottomPanel::top("top_panel").show(gui_ctx, |ui| {
-
         // File
         egui::menu::bar(ui, |ui| {
             ui.menu_button("File", |ui| {
                 if ui.button("Set TF2 Directory").clicked() {
                     match rfd::FileDialog::new().pick_folder() {
                         Some(pb) => {
-                            let dir;
-                            match pb.strip_prefix(std::env::current_dir().unwrap()) {
+                            let dir =  match pb.strip_prefix(std::env::current_dir().unwrap()) {
                                 Ok(pb) => {
-                                    dir = pb.to_string_lossy().to_string();
+                                    pb.to_string_lossy().to_string()
                                 }
                                 Err(_) => {
-                                    dir = pb.to_string_lossy().to_string();
+                                    pb.to_string_lossy().to_string()
                                 }
-                            }
+                            };
                             state.settings.tf2_directory = dir;
                             state.log = LogWatcher::use_directory(&state.settings.tf2_directory);
                         }
@@ -65,15 +63,14 @@ pub fn render(
                 if let Some(player_type) = import_list {
                     match rfd::FileDialog::new().set_directory("cfg").pick_file() {
                         Some(pb) => {
-                            let dir;
-                            match pb.strip_prefix(std::env::current_dir().unwrap()) {
+                            let dir = match pb.strip_prefix(std::env::current_dir().unwrap()) {
                                 Ok(pb) => {
-                                    dir = pb.to_string_lossy().to_string();
+                                    pb.to_string_lossy().to_string()
                                 }
                                 Err(_) => {
-                                    dir = pb.to_string_lossy().to_string();
+                                    pb.to_string_lossy().to_string()
                                 }
-                            }
+                            };
 
                             match state
                                 .player_checker
@@ -84,7 +81,7 @@ pub fn render(
                                         "{}",
                                         format!(
                                             "Added {} as a steamid list",
-                                            &dir.split("/").last().unwrap()
+                                            &dir.split('/').last().unwrap()
                                         )
                                     );
                                 }
@@ -116,6 +113,10 @@ pub fn render(
                     windows.push(view_players_window());
                 }
             });
+
+            if ui.button("Recent players").clicked() {
+                windows.push(player_windows::recent_players_window());
+            }
         });
     });
 
@@ -132,6 +133,7 @@ pub fn render(
     // Left panel
     egui::SidePanel::left("side_panel").default_width(230.0).show(gui_ctx, |ui| {
         egui::ScrollArea::vertical().show(ui, |ui| {
+
             ui.heading("Settings");
 
             ui.horizontal(|ui| {
@@ -152,6 +154,8 @@ pub fn render(
                 );
                 ui.label("Refresh Period").on_hover_text("Time between refreshing the server information.");
             });
+
+            ui.checkbox(&mut state.settings.paused, "Pause actions").on_hover_text("Prevents the program from calling any votekicks or sending chat messages.");
 
             ui.add(Separator::default().spacing(20.0));
             ui.heading("Kicking");
@@ -211,15 +215,14 @@ pub fn render(
                 if ui.button("Set your TF2 directory").clicked() {
                     match rfd::FileDialog::new().pick_folder() {
                         Some(pb) => {
-                            let dir;
-                            match pb.strip_prefix(std::env::current_dir().unwrap()) {
+                            let dir = match pb.strip_prefix(std::env::current_dir().unwrap()) {
                                 Ok(pb) => {
-                                    dir = pb.to_string_lossy().to_string();
+                                    pb.to_string_lossy().to_string()
                                 },
                                 Err(_) => {
-                                    dir = pb.to_string_lossy().to_string();
+                                    pb.to_string_lossy().to_string()
                                 }
-                            }
+                            };
                             state.settings.tf2_directory = dir;
                             state.log = LogWatcher::use_directory(&state.settings.tf2_directory);
                         },
@@ -284,11 +287,8 @@ fn copy_label(text: &str, ui: &mut Ui) {
     let lab = ui.selectable_label(false, text);
     if lab.clicked() {
         let ctx: Result<ClipboardContext, Box<dyn std::error::Error>> = ClipboardProvider::new();
-        match ctx {
-            Ok(mut ctx) => {
-                ctx.set_contents(text.to_string()).ok();
-            }
-            Err(_) => {}
+        if let Ok(mut ctx) = ctx {
+            ctx.set_contents(text.to_string()).ok();
         }
     }
     lab.on_hover_text("Copy");
@@ -384,39 +384,11 @@ fn render_players(
                                 // Player Type combobox
                                 ui.horizontal(|ui| {
                                     ui.label("Player Type");
-                                    let mut changed = false;
-                                    ComboBox::from_id_source(&player.steamid)
-                                        .selected_text(
-                                            RichText::new(format!("{:?}", player.player_type))
-                                                .color(player.player_type.color(ui)),
-                                        )
-                                        .show_ui(ui, |ui| {
-                                            changed |= ui
-                                                .selectable_value(
-                                                    &mut player.player_type,
-                                                    PlayerType::Player,
-                                                    "Player",
-                                                )
-                                                .clicked();
-                                            changed |= ui
-                                                .selectable_value(
-                                                    &mut player.player_type,
-                                                    PlayerType::Bot,
-                                                    RichText::new("Bot")
-                                                        .color(PlayerType::Bot.color(ui)),
-                                                )
-                                                .clicked();
-                                            changed |= ui
-                                                .selectable_value(
-                                                    &mut player.player_type,
-                                                    PlayerType::Cheater,
-                                                    RichText::new("Cheater")
-                                                        .color(PlayerType::Cheater.color(ui)),
-                                                )
-                                                .clicked();
-                                        });
-
-                                    if changed {
+                                    if player_type_combobox(
+                                        &player.steamid,
+                                        &mut player.player_type,
+                                        ui,
+                                    ) {
                                         if player.player_type == PlayerType::Player
                                             && player.notes.is_empty()
                                         {
@@ -501,17 +473,17 @@ fn render_players(
                     ui.with_layout(egui::Layout::right_to_left(), |ui| {
                         ui.horizontal(|ui| {
                             ui.add_space(15.0);
+
+                            // Time
                             ui.label(&format_time(player.time));
 
-                            if player.player_type == PlayerType::Cheater {
-                                ui.add(Label::new(
-                                    RichText::new("Cheater").color(PlayerType::Cheater.color(ui)),
-                                ));
+                            if !player.notes.is_empty() {
+                                ui.label("☑");
                             }
-                            if player.player_type == PlayerType::Bot {
-                                ui.add(Label::new(
-                                    RichText::new("Bot").color(PlayerType::Bot.color(ui)),
-                                ));
+
+                            // Cheater / Bot / Joining
+                            if player.player_type != PlayerType::Player {
+                                ui.add(Label::new(player.player_type.rich_text()));
                             }
                             if player.state == PlayerState::Spawning {
                                 ui.add(Label::new(RichText::new("Joining").color(Color32::YELLOW)));
@@ -541,11 +513,9 @@ fn create_edit_notes_window(mut record: PlayerRecord) -> PersistentWindow<State>
                                 p.notes = record.notes.clone();
                             }
 
-                            if record.notes.is_empty() {
-                                if record.player_type == PlayerType::Player {
-                                    state.player_checker.players.remove(&record.steamid);
-                                    return;
-                                }
+                            if record.notes.is_empty() && record.player_type == PlayerType::Player {
+                                state.player_checker.players.remove(&record.steamid);
+                                return;
                             }
 
                             state.player_checker.update_player_record(record.clone());
@@ -572,4 +542,38 @@ fn create_dialog_box(title: String, text: String) -> PersistentWindow<State> {
 
         open
     }))
+}
+
+/// Creates a dropdown combobox to select a player type
+pub fn player_type_combobox(id: &str, player_type: &mut PlayerType, ui: &mut Ui) -> bool {
+    let mut changed = false;
+    ComboBox::from_id_source(id)
+        .selected_text(player_type.rich_text())
+        .show_ui(ui, |ui| {
+            changed |= ui
+                .selectable_value(
+                    player_type,
+                    PlayerType::Player,
+                    PlayerType::Player.rich_text(),
+                )
+                .clicked();
+            changed |= ui
+                .selectable_value(player_type, PlayerType::Bot, PlayerType::Bot.rich_text())
+                .clicked();
+            changed |= ui
+                .selectable_value(
+                    player_type,
+                    PlayerType::Cheater,
+                    PlayerType::Cheater.rich_text(),
+                )
+                .clicked();
+            changed |= ui
+                .selectable_value(
+                    player_type,
+                    PlayerType::Suspicious,
+                    PlayerType::Suspicious.rich_text(),
+                )
+                .clicked();
+        });
+    changed
 }
