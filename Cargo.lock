@@ -858,7 +858,7 @@ dependencies = [
 [[package]]
 name = "glium_app"
 version = "0.1.0"
-source = "git+https://github.com/Googe14/glium-app#2a852e9a19d5ad0a1122a748bcfea66fdd34144f"
+source = "git+https://github.com/Bash-09/glium-app#2a852e9a19d5ad0a1122a748bcfea66fdd34144f"
 dependencies = [
  "egui",
  "egui-winit",

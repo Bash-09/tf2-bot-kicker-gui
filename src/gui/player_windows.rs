@@ -97,7 +97,7 @@ pub fn view_players_window() -> PersistentWindow<State> {
                         }
                         true
                     });
-                    egui::ScrollArea::vertical().show_rows(ui, 20.0, players.len(), |ui, range| {
+                    egui::ScrollArea::vertical().show_rows(ui, ui.text_style_height(&egui::TextStyle::Body), players.len(), |ui, range| {
                         for i in range {
                             let p: &mut PlayerRecord = players[i];
 
@@ -208,12 +208,12 @@ pub fn recent_players_window() -> PersistentWindow<State> {
             .open(&mut open)
             .collapsible(true)
             .show(gui_ctx, |ui| {
-                egui::ScrollArea::vertical().show(ui, |ui| {
+                egui::ScrollArea::vertical().show_rows(ui, ui.text_style_height(&egui::TextStyle::Body), state.server.previous_players.inner().len(), |ui, range| {
                     let width = 500.0;
                     ui.set_width(width);
 
                     // Render players
-                    for player in state.server.previous_players.inner() {
+                    for player in state.server.previous_players.inner().range(range) {
                         ui.horizontal(|ui| {
                             ui.set_width(width);
 
