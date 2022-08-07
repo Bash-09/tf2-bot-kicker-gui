@@ -46,6 +46,7 @@ impl PlayerChecker {
         for regx in self.bots_regx.iter() {
             if regx.captures(&player.name).is_some() {
                 player.player_type = PlayerType::Bot;
+                player.common_name = true;
 
                 let note = format!("Matched bot regex: {}", regx.as_str());
                 if !player.notes.is_empty() {

@@ -118,66 +118,48 @@ impl Server {
     }
 
     pub fn send_chat_messages(&mut self, settings: &Settings, cmd: &mut CommandManager) {
-        // Remove unwanted accounts from the list to announce
-        self.new_connections.retain(|steamid| {
-            if let Some(p) = self.players.get(steamid) {
-                if !(settings.announce_bots && p.player_type == PlayerType::Bot)
-                    && !(settings.announce_cheaters && p.player_type == PlayerType::Cheater)
-                {
-                    return false;
-                }
-
-                if p.time > settings.alert_period.ceil() as u32 {
-                    return false;
-                }
-
-                return true;
-            }
-            false
-        });
-
-        if !settings.announce_bots && !settings.announce_cheaters {
-            return;
-        }
 
         let mut message = String::new();
 
         let mut bots = false;
         let mut cheaters = false;
+        let mut names: Vec<&str> = Vec::new();
 
         let mut invaders = false;
         let mut defenders = false;
 
-        // Get all newly connected illegitimate accounts
-        for steamid in &self.new_connections {
-            if let Some(p) = self.players.get(steamid) {
-                if p.time as u32 > settings.alert_period as u32 {
-                    continue;
+        // Remove accounts we don't want to announce, record the details of accounts we want to
+        // announce now, and leave the rest for later
+        self.new_connections.retain(|p| {
+            if let Some(p) = self.players.get(p) {
+                // Make sure it's a bot or cheater
+                if !(settings.announce_bots && p.player_type == PlayerType::Bot
+                    || settings.announce_cheaters && p.player_type == PlayerType::Cheater)
+                {
+                    return false;
                 }
 
-                match p.player_type {
-                    PlayerType::Bot => {
-                        if !settings.announce_bots {
-                            continue;
-                        }
-                        bots = true;
-                        invaders |= p.team == Team::Invaders;
-                        defenders |= p.team == Team::Defenders;
-                    }
-                    PlayerType::Cheater => {
-                        if !settings.announce_cheaters {
-                            continue;
-                        }
-                        cheaters = true;
-                        invaders |= p.team == Team::Invaders;
-                        defenders |= p.team == Team::Defenders;
-                    }
-                    _ => {}
+                // Don't announce common names
+                if settings.dont_announce_common_names && p.common_name {
+                    return false;
                 }
+
+                // Ignore accounts that haven't been assigned a team yet
+                if p.team == Team::None {
+                    return true;
+                }
+
+                // Record details of account for announcement
+                bots |= p.player_type == PlayerType::Bot;
+                cheaters |= p.player_type == PlayerType::Cheater;
+                invaders |= p.team == Team::Invaders;
+                defenders |= p.team == Team::Defenders;
+                names.push(&p.name);
             }
-        }
+            false
+        });
 
-        if self.new_connections.is_empty() {
+        if names.is_empty() {
             return;
         }
 
@@ -199,8 +181,13 @@ impl Server {
                     || (defenders && user.team == Team::Defenders)
                 {
                     message.push_str("our team: ");
-                } else {
+                } else if (invaders && user.team == Team::Defenders)
+                    || (defenders && user.team == Team::Invaders) 
+                {
                     message.push_str("the enemy team: ");
+                } else {
+                    message.push_str("the server: ");
+                    log::error!("Announcing bot that doesn't have a team.");
                 }
             }
             None => {
@@ -209,10 +196,9 @@ impl Server {
         }
 
         // Player names
-        let mut account_peekable = self.new_connections.iter().peekable();
-        while let Some(steamid) = account_peekable.next() {
-            let account = self.players.get(steamid).unwrap();
-            message.push_str(&account.name);
+        let mut account_peekable = names.iter().peekable();
+        while let Some(name) = account_peekable.next() {
+            message.push_str(name);
 
             if account_peekable.peek().is_some() {
                 message.push_str(", ");
@@ -224,5 +210,11 @@ impl Server {
         // Send message
         cmd.send_chat(&message);
         self.new_connections.clear();
+    }
+}
+
+impl Default for Server {
+    fn default() -> Self {
+        Self::new()
     }
 }

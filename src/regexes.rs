@@ -126,11 +126,13 @@ pub fn fn_status(
 
             accounted: true,
             stolen_name,
+            common_name: false,
         };
 
         if player_checker.check_player_steamid(&mut p) {
             log::info!("Known {:?} joining: {}", p.player_type, p.name);
-        } else if player_checker.check_player_name(&mut p) {
+        } 
+        if player_checker.check_player_name(&mut p) {
             log::info!("Unknown {:?} joining: {}", p.player_type, p.name);
         }
 
@@ -149,7 +151,9 @@ pub fn fn_status(
             player_checker.update_player(&p);
         }
 
-        server.new_connections.push(p.steamid.clone());
+        if p.time <= (settings.refresh_period * 1.5) as u32{
+            server.new_connections.push(p.steamid.clone());
+        }
         server.players.insert(p.steamid.clone(), p);
     }
 }

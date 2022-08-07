@@ -179,6 +179,7 @@ pub fn render(
             ui.checkbox(&mut state.settings.announce_bots, "Announce Bots").on_hover_text("Send a chat message indicating Bots joining the server.");
             ui.checkbox(&mut state.settings.announce_cheaters, "Announce Cheaters").on_hover_text("Send a chat message indicating cheaters joining the server.");
             ui.checkbox(&mut state.settings.announce_namesteal, "Announce Name-stealing").on_hover_text("Send a chat message when an account's name is changed to imitate another player (This is not affected by the chat message period).");
+            ui.checkbox(&mut state.settings.dont_announce_common_names, "Ignore Bots with common names").on_hover_text("Don't announce bots who's name matches saved regexes, to avoid announcing well-known bots (e.g. DoesHotter, m4gic).");
 
             ui.horizontal(|ui| {
                 ui.add_enabled(state.settings.announce_bots || state.settings.announce_cheaters,

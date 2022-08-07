@@ -18,6 +18,7 @@ pub struct Settings {
     pub announce_bots: bool,
     pub announce_cheaters: bool,
     pub announce_namesteal: bool,
+    pub dont_announce_common_names: bool,
 
     pub kick_bots: bool,
     pub kick_cheaters: bool,
@@ -49,6 +50,7 @@ impl Settings {
             announce_bots: false,
             announce_cheaters: false,
             announce_namesteal: true,
+            dont_announce_common_names: true,
 
             kick_bots: true,
             kick_cheaters: false,
@@ -97,6 +99,9 @@ impl Settings {
         set.announce_namesteal = json["announce_namesteal"]
             .as_bool()
             .unwrap_or(set.announce_namesteal);
+        set.dont_announce_common_names = json["dont_announce_common_names"]
+            .as_bool()
+            .unwrap_or(set.dont_announce_common_names);
 
         set.kick_bots = json["kick_bots"].as_bool().unwrap_or(set.kick_bots);
         set.kick_cheaters = json["kick_cheaters"].as_bool().unwrap_or(set.kick_cheaters);
@@ -135,5 +140,11 @@ impl Settings {
             },
             Err(e) => Err(Box::new(e)),
         }
+    }
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self::new()
     }
 }

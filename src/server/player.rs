@@ -81,6 +81,7 @@ pub struct Player {
 
     pub accounted: bool,
     pub stolen_name: bool,
+    pub common_name: bool,
 }
 
 impl std::fmt::Display for Player {
