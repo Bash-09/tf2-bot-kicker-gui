@@ -10,7 +10,9 @@ A (somewhat) cross-platform bot identifier/kicker written in Rust.
 
 # What it does
 
-This program runs while you play TF2 and is able to check players on your server against a saved list of players to check if they are a bot or cheater and can automatically perform features such as votekick them or send chat messages to other players to warn of them joining the server. It also has functionality to check against common bot names (e.g. DoesHotter) or check if an account has stolen some else's name and automatically mark those accounts as bots.
+This is a program you run alongside TF2 while you play which automatically attempts to identify and vote-kick bots and cheaters on the server you are playing on, and can also send chat messages in-game to alert other players of bots or cheaters joining the server. It does this by maintaining a list of know or previously-seen steamids and checking if the players on the server are on that list, and if that fails it also checks player names against a list of regex rules to identify common bots such as DoesHotter or m4gic. It also features name-stealing detection, however that may not be necessary anymore as Valve has (hopefully) fixed name-stealing for good.
+
+This program operates using features already included in the Source engine as intended, no cheats required (so no VAC bans!).
 
 # Usage
 
@@ -59,18 +61,10 @@ Any saved regexes or players can be accessed/added/editted/deleted from the `Sav
 A list of accounts is stored in `cfg/playerlist.json` containing the SteamID, player type (Player/Bot/Cheater) and any recorded notes for that account. When players join the server their steamid is matched against this list to determine if they are a bot or cheater and will take appropriate action (send chat messages, kick, etc). If they are not a know account their name will be checked against a list of regexes in case they have a common bot name (e.g. DoesHotter).
 
 # Building
-This program should build without issue through Cargo on Windows. 
-
-On Linux some libraries may need to be installed. (As listed in the Ubuntu repository)
-
-`librust-gdk-dev`\
-`libudev-dev`\
-`libxcb-render0-dev`\
-`libxcb-shape0-dev`\
-`libxcb-xfixes0-dev`
+This program should build without issue through Cargo on Windows, on Linux some libraries may need to be installed.
 
 # How it works
  
-By adding `-usercon` to your TF2 launch options and the settings in your `autoexec.cfg` file, programs are able to initiate a Remote CONsole with the game over a TCP connection. From this RCON connection, this program can execute commands and read the response while you are busy playing TF2. Using commands like `status` and `tf_lobby_debug`, the program is able to see the names and SteamIDs of players in your Casual server, which it uses to identify bots according to the SteamIDs or names saved in any files you have set in the program. If any players are identified as a bot by their SteamID or name, this program will take appropriate action.
+The Source engine allows programs to initiate a `remote console` or `RCON` to the game (provided you have the correct launch options set) through TCP, which means this program can connect to TF2 and send in-game commands to the console remotely. By using commands such as `tf_lobby_debug` and `status` we can retrieve information about players on the server you are currently connected to (such as their name, steamid, which team they are on, how long they have been connected to the server, etc) which is used to check the existing steamid list and name rules to identify players as bots or cheaters. Once that is known, we can call a votekick or send chat messages through more remote console commands.
 
-Unfortunately the `status` command runs but does not respond over rcon, instead outputting into the local game console. To overcome this, `-condebug -conclearlog` is added the the TF2 launch options to output the contents of the in-game console to a log file, which this program reads from to get the output of the status command.
+Some commands do not respond through rcon but instead output their contents into the in-game console. Instead, by using the `-condebug -conclearlog` launch options TF2 will output the in-game console to a log file in real-time which this program reads from, this is why you are required to set your TF2 directory on program startup.
