@@ -33,6 +33,8 @@ pub struct Settings {
     pub tf2_directory: String,
 
     pub mark_name_stealers: bool,
+
+    pub ignore_version: String,
 }
 
 impl Settings {
@@ -65,6 +67,7 @@ impl Settings {
             tf2_directory: String::new(),
 
             mark_name_stealers: true,
+            ignore_version: String::new(),
         }
     }
 
@@ -121,6 +124,10 @@ impl Settings {
         set.tf2_directory = json["tf2_directory"]
             .as_str()
             .unwrap_or(&set.tf2_directory)
+            .to_string();
+        set.ignore_version = json["ignore_version"]
+            .as_str()
+            .unwrap_or(&set.ignore_version)
             .to_string();
 
         set.mark_name_stealers = json["mark_name_stealers"]

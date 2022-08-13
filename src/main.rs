@@ -14,9 +14,11 @@ pub mod server;
 pub mod settings;
 pub mod state;
 pub mod timer;
+pub mod version;
 
 use chrono::{DateTime, Local};
 use command_manager::CommandManager;
+use egui::{Align2, Vec2};
 use egui_winit::winit::{
     dpi::{PhysicalPosition, PhysicalSize},
     window::{Icon, WindowBuilder},
@@ -26,14 +28,15 @@ use glium::{
     Display,
 };
 use glium_app::{
-    context::Context, run_with_context, utils::persistent_window::PersistentWindowManager,
+    context::Context, run_with_context, utils::persistent_window::{PersistentWindowManager, PersistentWindow},
     Application,
 };
 use image::{EncodableLayout, ImageFormat};
 use player_checker::{PLAYER_LIST, REGEX_LIST};
 use server::{player::PlayerType, *};
 use state::State;
-use std::{io::Cursor, time::SystemTime};
+use version::VersionResponse;
+use std::{io::Cursor, time::SystemTime, sync::mpsc::TryRecvError};
 mod regexes;
 
 fn main() {
@@ -100,6 +103,8 @@ impl Application for TF2BotKicker {
         self.state.refresh_timer.reset();
         self.state.kick_timer.reset();
         self.state.alert_timer.reset();
+
+        self.state.latest_version = Some(VersionResponse::request_latest_version());
     }
 
     fn update(&mut self, _t: &glium_app::Timer, ctx: &mut Context) {
@@ -108,6 +113,43 @@ impl Application for TF2BotKicker {
             cmd: _,
             windows,
         } = self;
+
+        if let Some(latest) = &mut state.latest_version {
+            match latest.try_recv() {
+                Ok(Ok(latest)) => {
+                    log::debug!("Got latest version of application, current: {}, latest: {}", version::VERSION, latest.version);
+
+                    if latest.version != version::VERSION && (latest.version != state.settings.ignore_version || state.force_latest_version) {
+                        windows.push(latest.to_persistent_window());
+                        state.force_latest_version = false;
+                    } else if state.force_latest_version {
+                        windows.push(PersistentWindow::new(Box::new(|_, _, ctx, _| {
+                            let mut open = true;
+                            egui::Window::new("No updates available")
+                                .collapsible(false)
+                                .resizable(false)
+                                .open(&mut open)
+                                .anchor(Align2::CENTER_CENTER, Vec2::new(0.0, 0.0))
+                                .show(ctx, |ui|{
+                                    ui.label("You already have the latest version.");
+                                });
+                            open
+                        })));
+                    }
+
+                    state.latest_version = None;
+                },
+                Ok(Err(e)) => { 
+                    log::error!("Error getting latest version: {:?}", e);
+                    state.latest_version = None;
+                },
+                Err(TryRecvError::Disconnected) =>  {
+                    log::error!("Error getting latest version, other thread did not respond");
+                    state.latest_version = None;
+                },
+                Err(TryRecvError::Empty) => {},
+            }
+        }
 
         let refresh = state.refresh_timer.go(state.settings.refresh_period);
 
@@ -132,18 +174,6 @@ impl Application for TF2BotKicker {
             Some(lw) => {
                 // If there is a loaded dir, process any new console lines
                 while let Some(line) = lw.next_line() {
-                    if let Some(c) = state.regx_disconnect.r.captures(&line) {
-                        (state.regx_disconnect.f)(
-                            &mut state.server,
-                            &line,
-                            c,
-                            &state.settings,
-                            &mut state.player_checker,
-                            &mut self.cmd,
-                        );
-                        continue;
-                    }
-
                     if let Some(c) = state.regx_status.r.captures(&line) {
                         (state.regx_status.f)(
                             &mut state.server,

@@ -151,7 +151,7 @@ pub fn fn_status(
             player_checker.update_player(&p);
         }
 
-        if p.time <= (settings.refresh_period * 1.5) as u32{
+        if p.time <= (settings.refresh_period * 1.5).ceil() as u32{
             server.new_connections.push(p.steamid.clone());
         }
         server.players.insert(p.steamid.clone(), p);
@@ -208,18 +208,6 @@ pub fn fn_lobby(
             p.accounted = true;
         }
     }
-}
-
-pub const REGEX_USER_DISCONNECTED: &str = r#"^Disconnecting from .*"#;
-pub fn fn_user_disconnect(
-    serv: &mut Server,
-    str: &str,
-    caps: Captures,
-    set: &Settings,
-    bot_checker: &mut PlayerChecker,
-    cmd: &mut CommandManager,
-) {
-    serv.clear();
 }
 
 const INVIS_CHARS: &[char] = &[

@@ -1,3 +1,5 @@
+use std::{sync::mpsc::Receiver, error::Error};
+
 use regex::Regex;
 
 use crate::{
@@ -5,12 +7,11 @@ use crate::{
     logwatcher::LogWatcher,
     player_checker::{PlayerChecker, PLAYER_LIST, REGEX_LIST},
     regexes::{
-        fn_lobby, fn_status, fn_user_disconnect, LogMatcher, REGEX_LOBBY, REGEX_STATUS,
-        REGEX_USER_DISCONNECTED,
+        fn_lobby, fn_status, LogMatcher, REGEX_LOBBY, REGEX_STATUS
     },
     server::Server,
     settings::Settings,
-    timer::Timer,
+    timer::Timer, version::VersionResponse,
 };
 
 pub struct State {
@@ -25,9 +26,11 @@ pub struct State {
 
     pub regx_status: LogMatcher,
     pub regx_lobby: LogMatcher,
-    pub regx_disconnect: LogMatcher,
 
     pub player_checker: PlayerChecker,
+
+    pub latest_version: Option<Receiver<Result<VersionResponse, Box<dyn Error + Send>>>>,
+    pub force_latest_version: bool,
 }
 
 impl State {
@@ -50,10 +53,6 @@ impl State {
         // Load regexes
         let regx_status = LogMatcher::new(Regex::new(REGEX_STATUS).unwrap(), fn_status);
         let regx_lobby = LogMatcher::new(Regex::new(REGEX_LOBBY).unwrap(), fn_lobby);
-        let regx_disconnect = LogMatcher::new(
-            Regex::new(REGEX_USER_DISCONNECTED).unwrap(),
-            fn_user_disconnect,
-        );
 
         // Create player checker and load any regexes and players saved
         let mut player_checker = PlayerChecker::new();
@@ -85,9 +84,10 @@ impl State {
 
             regx_status,
             regx_lobby,
-            regx_disconnect,
 
             player_checker,
+            latest_version: None,
+            force_latest_version: false,
         }
     }
 

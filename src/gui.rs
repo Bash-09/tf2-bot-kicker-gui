@@ -9,7 +9,7 @@ use crate::{
     logwatcher::LogWatcher,
     player_checker::PlayerRecord,
     server::player::{Player, PlayerState, PlayerType, Team},
-    state::State,
+    state::State, version::{self, VersionResponse},
 };
 
 use self::{
@@ -117,6 +117,11 @@ pub fn render(
             if ui.button("Recent players").clicked() {
                 windows.push(player_windows::recent_players_window());
             }
+
+            if ui.button("Check for updates").clicked() && state.latest_version.is_none() {
+                state.latest_version = Some(VersionResponse::request_latest_version());
+                state.force_latest_version = true;
+            }
         });
     });
 
@@ -127,6 +132,10 @@ pub fn render(
             ui.spacing_mut().item_spacing.x = 0.0;
             ui.label("powered by ");
             ui.hyperlink_to("egui", "https://github.com/emilk/egui");
+
+            ui.with_layout(egui::Layout::right_to_left(), |ui| {
+                ui.label(version::VERSION);
+            });
         });
     });
 

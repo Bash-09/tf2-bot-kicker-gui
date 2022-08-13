@@ -209,7 +209,6 @@ impl Server {
 
         // Send message
         cmd.send_chat(&message);
-        self.new_connections.clear();
     }
 }
 
