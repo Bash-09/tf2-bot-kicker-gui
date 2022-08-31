@@ -59,6 +59,9 @@ pub fn render(
                 if ui.button("Import SteamIDs as Cheaters").clicked() {
                     import_list = Some(PlayerType::Cheater);
                 }
+                if ui.button("Import SteamIDs as Suspicious").clicked() {
+                    import_list = Some(PlayerType::Suspicious);
+                }
 
                 if let Some(player_type) = import_list {
                     match rfd::FileDialog::new().set_directory("cfg").pick_file() {
