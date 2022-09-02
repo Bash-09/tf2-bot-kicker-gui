@@ -97,9 +97,11 @@ pub fn view_players_window() -> PersistentWindow<State> {
                         }
                         true
                     });
-                    egui::ScrollArea::vertical().show_rows(ui, ui.text_style_height(&egui::TextStyle::Body), players.len(), |ui, range| {
+
+                    let len = players.len();
+                    egui::ScrollArea::vertical().show_rows(ui, ui.text_style_height(&egui::TextStyle::Body), len, |ui, range| {
                         for i in range {
-                            let p: &mut PlayerRecord = players[i];
+                            let p: &mut PlayerRecord = players[len - i - 1];
 
                             ui.horizontal(|ui| {
                                 if ui.button("Delete").clicked() {

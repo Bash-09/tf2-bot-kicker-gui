@@ -49,10 +49,9 @@ impl PlayerChecker {
                 player.common_name = true;
 
                 let note = format!("Matched bot regex: {}", regx.as_str());
-                if !player.notes.is_empty() {
-                    player.notes.push('\n');
+                if player.notes.is_empty() {
+                    player.notes.push_str(&note);
                 }
-                player.notes.push_str(&note);
 
                 self.update_player(player);
                 return true;
@@ -193,6 +192,7 @@ impl PlayerChecker {
                 "Player" => PlayerType::Player,
                 "Bot" => PlayerType::Bot,
                 "Cheater" => PlayerType::Cheater,
+                "Suspicious" => PlayerType::Suspicious,
                 _ => continue,
             };
 

@@ -66,7 +66,7 @@ pub fn view_regexes_window() -> PersistentWindow<State> {
 
                     // List of regexes
                     egui::ScrollArea::vertical().show(ui, |ui| {
-                        for (i, regex) in state.player_checker.bots_regx.iter().enumerate() {
+                        for (i, regex) in state.player_checker.bots_regx.iter().enumerate().rev() {
                             ui.horizontal(|ui| {
                                 ui.label(regex.as_str());
 
