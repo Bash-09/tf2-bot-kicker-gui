@@ -99,43 +99,48 @@ pub fn view_players_window() -> PersistentWindow<State> {
                     });
 
                     let len = players.len();
-                    egui::ScrollArea::vertical().show_rows(ui, ui.text_style_height(&egui::TextStyle::Body), len, |ui, range| {
-                        for i in range {
-                            let p: &mut PlayerRecord = players[len - i - 1];
+                    egui::ScrollArea::vertical().show_rows(
+                        ui,
+                        ui.text_style_height(&egui::TextStyle::Body),
+                        len,
+                        |ui, range| {
+                            for i in range {
+                                let p: &mut PlayerRecord = players[len - i - 1];
 
-                            ui.horizontal(|ui| {
-                                if ui.button("Delete").clicked() {
-                                    action = Some(Action::Delete(p.steamid.clone()));
-                                }
-                                if ui.button("Edit").clicked() {
-                                    action = Some(Action::Edit(p.steamid.clone()));
-                                }
-
-                                ui.add_sized(
-                                    Vec2::new(50.0, 20.0),
-                                    Label::new(
-                                        RichText::new(&format!("{:?}", p.player_type))
-                                            .color(p.player_type.color(ui)),
-                                    ),
-                                );
-
-                                let steamid_response = ui.add_sized(
-                                    Vec2::new(100.0, 20.0),
-                                    SelectableLabel::new(false, &p.steamid),
-                                );
-                                if steamid_response.clicked() {
-                                    let ctx: Result<ClipboardContext, Box<dyn Error>> =
-                                        ClipboardContext::new();
-                                    if let Ok(mut ctx) = ctx {
-                                        ctx.set_contents(p.steamid.clone()).ok();
+                                ui.horizontal(|ui| {
+                                    if ui.button("Delete").clicked() {
+                                        action = Some(Action::Delete(p.steamid.clone()));
                                     }
-                                }
-                                steamid_response.on_hover_text("Click to copy");
-                                ui.label(&p.notes);
-                                ui.add_space(ui.available_width());
-                            });
-                        }
-                    });
+                                    if ui.button("Edit").clicked() {
+                                        action = Some(Action::Edit(p.steamid.clone()));
+                                    }
+
+                                    ui.add_sized(
+                                        Vec2::new(50.0, 20.0),
+                                        Label::new(
+                                            RichText::new(&format!("{:?}", p.player_type))
+                                                .color(p.player_type.color(ui)),
+                                        ),
+                                    );
+
+                                    let steamid_response = ui.add_sized(
+                                        Vec2::new(100.0, 20.0),
+                                        SelectableLabel::new(false, &p.steamid),
+                                    );
+                                    if steamid_response.clicked() {
+                                        let ctx: Result<ClipboardContext, Box<dyn Error>> =
+                                            ClipboardContext::new();
+                                        if let Ok(mut ctx) = ctx {
+                                            ctx.set_contents(p.steamid.clone()).ok();
+                                        }
+                                    }
+                                    steamid_response.on_hover_text("Click to copy");
+                                    ui.label(&p.notes);
+                                    ui.add_space(ui.available_width());
+                                });
+                            }
+                        },
+                    );
                 });
             });
 
@@ -187,7 +192,7 @@ pub fn edit_player_window(mut record: PlayerRecord) -> PersistentWindow<State> {
 
                     // Update previous players record
                     for p in state.server.previous_players.inner_mut() {
-                        if p.steamid != record.steamid {
+                        if p.steamid32 != record.steamid {
                             continue;
                         }
 
@@ -210,82 +215,88 @@ pub fn recent_players_window() -> PersistentWindow<State> {
             .open(&mut open)
             .collapsible(true)
             .show(gui_ctx, |ui| {
-                egui::ScrollArea::vertical().show_rows(ui, ui.text_style_height(&egui::TextStyle::Body), state.server.previous_players.inner().len(), |ui, range| {
-                    let width = 500.0;
-                    ui.set_width(width);
+                egui::ScrollArea::vertical().show_rows(
+                    ui,
+                    ui.text_style_height(&egui::TextStyle::Body),
+                    state.server.previous_players.inner().len(),
+                    |ui, range| {
+                        let width = 500.0;
+                        ui.set_width(width);
 
-                    // Render players
-                    for i in range {
-                        let player = &state.server.previous_players.inner()[state.server.previous_players.inner().len() - i - 1];
+                        // Render players
+                        for i in range {
+                            let player = &state.server.previous_players.inner()
+                                [state.server.previous_players.inner().len() - i - 1];
 
-                        ui.horizontal(|ui| {
-                            ui.set_width(width);
+                            ui.horizontal(|ui| {
+                                ui.set_width(width);
 
-                            let text;
-                            if player.steamid == state.settings.user {
-                                text = egui::RichText::new(truncate(&player.name, TRUNC_LEN))
-                                    .color(Color32::GREEN);
-                            } else if player.player_type == PlayerType::Bot
-                                || player.player_type == PlayerType::Cheater
-                            {
-                                text = egui::RichText::new(truncate(&player.name, TRUNC_LEN))
-                                    .color(player.player_type.color(ui));
-                            } else if player.stolen_name {
-                                text = egui::RichText::new(truncate(&player.name, TRUNC_LEN))
-                                    .color(Color32::YELLOW);
-                            } else {
-                                text = egui::RichText::new(truncate(&player.name, TRUNC_LEN));
-                            }
+                                let text;
+                                if player.steamid32 == state.settings.user {
+                                    text = egui::RichText::new(truncate(&player.name, TRUNC_LEN))
+                                        .color(Color32::GREEN);
+                                } else if player.player_type == PlayerType::Bot
+                                    || player.player_type == PlayerType::Cheater
+                                {
+                                    text = egui::RichText::new(truncate(&player.name, TRUNC_LEN))
+                                        .color(player.player_type.color(ui));
+                                } else if player.stolen_name {
+                                    text = egui::RichText::new(truncate(&player.name, TRUNC_LEN))
+                                        .color(Color32::YELLOW);
+                                } else {
+                                    text = egui::RichText::new(truncate(&player.name, TRUNC_LEN));
+                                }
 
-                            let header = ui.selectable_label(false, text);
+                                let header = ui.selectable_label(false, text);
 
-                            if header.clicked() {
-                                windows.push(edit_player_window(player.get_record()));
-                            }
+                                if header.clicked() {
+                                    windows.push(edit_player_window(player.get_record()));
+                                }
 
-                            // Notes / Stolen name warning
-                            if player.stolen_name || !player.notes.is_empty() {
-                                header.on_hover_ui(|ui| {
-                                    if player.stolen_name {
-                                        ui.label(
+                                // Notes / Stolen name warning
+                                if player.stolen_name || !player.notes.is_empty() {
+                                    header.on_hover_ui(|ui| {
+                                        if player.stolen_name {
+                                            ui.label(
                                             RichText::new(
                                                 "A player with this name is already on the server.",
                                             )
                                             .color(Color32::YELLOW),
                                         );
-                                    }
-                                    if !player.notes.is_empty() {
-                                        ui.label(&player.notes);
-                                    }
-                                });
-                            }
+                                        }
+                                        if !player.notes.is_empty() {
+                                            ui.label(&player.notes);
+                                        }
+                                    });
+                                }
 
-                            // Cheater, Bot and Joining labels
-                            ui.with_layout(egui::Layout::right_to_left(), |ui| {
-                                ui.horizontal(|ui| {
-                                    ui.add_space(15.0);
+                                // Cheater, Bot and Joining labels
+                                ui.with_layout(egui::Layout::right_to_left(), |ui| {
+                                    ui.horizontal(|ui| {
+                                        ui.add_space(15.0);
 
-                                    // Time
-                                    ui.label(&format_time(player.time));
+                                        // Time
+                                        ui.label(&format_time(player.time));
 
-                                    if !player.notes.is_empty() {
-                                        ui.label("☑");
-                                    }
+                                        if !player.notes.is_empty() {
+                                            ui.label("☑");
+                                        }
 
-                                    // Cheater / Bot / Joining
-                                    if player.player_type != PlayerType::Player {
-                                        ui.add(Label::new(player.player_type.rich_text()));
-                                    }
-                                    if player.state == PlayerState::Spawning {
-                                        ui.add(Label::new(
-                                            RichText::new("Joining").color(Color32::YELLOW),
-                                        ));
-                                    }
+                                        // Cheater / Bot / Joining
+                                        if player.player_type != PlayerType::Player {
+                                            ui.add(Label::new(player.player_type.rich_text()));
+                                        }
+                                        if player.state == PlayerState::Spawning {
+                                            ui.add(Label::new(
+                                                RichText::new("Joining").color(Color32::YELLOW),
+                                            ));
+                                        }
+                                    });
                                 });
                             });
-                        });
-                    }
-                });
+                        }
+                    },
+                );
             });
         open
     }))

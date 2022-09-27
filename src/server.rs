@@ -118,7 +118,6 @@ impl Server {
     }
 
     pub fn send_chat_messages(&mut self, settings: &Settings, cmd: &mut CommandManager) {
-
         let mut message = String::new();
 
         let mut bots = false;
@@ -182,7 +181,7 @@ impl Server {
                 {
                     message.push_str("our team: ");
                 } else if (invaders && user.team == Team::Defenders)
-                    || (defenders && user.team == Team::Invaders) 
+                    || (defenders && user.team == Team::Invaders)
                 {
                     message.push_str("the enemy team: ");
                 } else {

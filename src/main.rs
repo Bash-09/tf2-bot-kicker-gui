@@ -18,7 +18,7 @@ pub mod version;
 
 use chrono::{DateTime, Local};
 use command_manager::CommandManager;
-use egui::{Align2, Vec2, Color32, Style, Visuals};
+use egui::{Align2, Vec2};
 use egui_winit::winit::{
     dpi::{PhysicalPosition, PhysicalSize},
     window::{Icon, WindowBuilder},
@@ -28,15 +28,17 @@ use glium::{
     Display,
 };
 use glium_app::{
-    context::Context, run_with_context, utils::persistent_window::{PersistentWindowManager, PersistentWindow},
+    context::Context,
+    run_with_context,
+    utils::persistent_window::{PersistentWindow, PersistentWindowManager},
     Application,
 };
 use image::{EncodableLayout, ImageFormat};
 use player_checker::{PLAYER_LIST, REGEX_LIST};
 use server::{player::PlayerType, *};
 use state::State;
+use std::{io::Cursor, sync::mpsc::TryRecvError, time::SystemTime};
 use version::VersionResponse;
-use std::{io::Cursor, time::SystemTime, sync::mpsc::TryRecvError};
 mod regexes;
 
 fn main() {
@@ -83,6 +85,12 @@ pub struct TF2BotKicker {
     windows: PersistentWindowManager<State>,
 }
 
+impl Default for TF2BotKicker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TF2BotKicker {
     // Create the application
     pub fn new() -> TF2BotKicker {
@@ -117,9 +125,16 @@ impl Application for TF2BotKicker {
         if let Some(latest) = &mut state.latest_version {
             match latest.try_recv() {
                 Ok(Ok(latest)) => {
-                    log::debug!("Got latest version of application, current: {}, latest: {}", version::VERSION, latest.version);
+                    log::debug!(
+                        "Got latest version of application, current: {}, latest: {}",
+                        version::VERSION,
+                        latest.version
+                    );
 
-                    if latest.version != version::VERSION && (latest.version != state.settings.ignore_version || state.force_latest_version) {
+                    if latest.version != version::VERSION
+                        && (latest.version != state.settings.ignore_version
+                            || state.force_latest_version)
+                    {
                         windows.push(latest.to_persistent_window());
                         state.force_latest_version = false;
                     } else if state.force_latest_version {
@@ -130,7 +145,7 @@ impl Application for TF2BotKicker {
                                 .resizable(false)
                                 .open(&mut open)
                                 .anchor(Align2::CENTER_CENTER, Vec2::new(0.0, 0.0))
-                                .show(ctx, |ui|{
+                                .show(ctx, |ui| {
                                     ui.label("You already have the latest version.");
                                 });
                             open
@@ -138,16 +153,16 @@ impl Application for TF2BotKicker {
                     }
 
                     state.latest_version = None;
-                },
-                Ok(Err(e)) => { 
+                }
+                Ok(Err(e)) => {
                     log::error!("Error getting latest version: {:?}", e);
                     state.latest_version = None;
-                },
-                Err(TryRecvError::Disconnected) =>  {
+                }
+                Err(TryRecvError::Disconnected) => {
                     log::error!("Error getting latest version, other thread did not respond");
                     state.latest_version = None;
-                },
-                Err(TryRecvError::Empty) => {},
+                }
+                Err(TryRecvError::Empty) => {}
             }
         }
 
@@ -194,15 +209,19 @@ impl Application for TF2BotKicker {
         if !state.settings.paused {
             if state.kick_timer.update() {
                 if state.settings.kick_bots {
-                    state
-                        .server
-                        .kick_players_of_type(&state.settings, &mut self.cmd, PlayerType::Bot);
+                    state.server.kick_players_of_type(
+                        &state.settings,
+                        &mut self.cmd,
+                        PlayerType::Bot,
+                    );
                 }
 
                 if state.settings.kick_cheaters {
-                    state
-                        .server
-                        .kick_players_of_type(&state.settings, &mut self.cmd, PlayerType::Cheater);
+                    state.server.kick_players_of_type(
+                        &state.settings,
+                        &mut self.cmd,
+                        PlayerType::Cheater,
+                    );
                 }
             }
 

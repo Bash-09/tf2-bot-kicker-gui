@@ -72,7 +72,8 @@ impl std::fmt::Display for PlayerState {
 pub struct Player {
     pub userid: String,
     pub name: String,
-    pub steamid: String,
+    pub steamid32: String,
+    pub steamid64: u64,
     pub time: u32,
     pub team: Team,
     pub state: PlayerState,
@@ -89,14 +90,14 @@ impl std::fmt::Display for Player {
         write!(
             f,
             "{} - {}, \tUID: {}, SteamID: {}, State: {}, Type: {:?}",
-            self.team, self.name, self.userid, self.steamid, self.state, self.player_type
+            self.team, self.name, self.userid, self.steamid32, self.state, self.player_type
         )
     }
 }
 
 impl Player {
     pub fn get_export_steamid(&self) -> String {
-        format!("[{}] - {}", &self.steamid, &self.name)
+        format!("[{}] - {}", &self.steamid32, &self.name)
     }
 
     pub fn get_export_regex(&self) -> String {
@@ -105,9 +106,21 @@ impl Player {
 
     pub fn get_record(&self) -> PlayerRecord {
         PlayerRecord {
-            steamid: self.steamid.clone(),
+            steamid: self.steamid32.clone(),
             player_type: self.player_type,
             notes: self.notes.clone(),
         }
     }
+}
+
+pub fn steamid_32_to_64(steamid32: &str) -> Option<u64> {
+    let segments: Vec<&str> = steamid32.split(':').collect();
+
+    let id32: u64 = if let Ok(id32) = segments.get(2)?.parse() {
+        id32
+    } else {
+        return None;
+    };
+
+    Some(id32 + 76561197960265728)
 }

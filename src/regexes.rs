@@ -61,7 +61,11 @@ pub fn fn_status(
     player_checker: &mut PlayerChecker,
     cmd: &mut CommandManager,
 ) {
-    let steamid = caps[3].to_string();
+    let steamid32 = caps[3].to_string();
+    let steamid64 = steamid_32_to_64(&steamid32).unwrap_or(0);
+    if steamid64 == 0 {
+        log::error!("Could not convert steamid32 to steamid64: {}", steamid32);
+    }
 
     let mut player_state = PlayerState::Spawning;
     if caps[5].eq("active") {
@@ -75,14 +79,14 @@ pub fn fn_status(
     // Check for name stealing
     let mut stolen_name = false;
     for (k, p) in &server.players {
-        if steamid == p.steamid || time > p.time {
+        if steamid32 == p.steamid32 || time > p.time {
             continue;
         }
         stolen_name |= name == p.name;
     }
 
     // Update an existing player
-    if let Some(p) = server.players.get_mut(&steamid) {
+    if let Some(p) = server.players.get_mut(&steamid32) {
         p.userid = caps[1].to_string();
         p.time = time;
         p.state = player_state;
@@ -117,7 +121,8 @@ pub fn fn_status(
         let mut p = Player {
             userid: caps[1].to_string(),
             name,
-            steamid,
+            steamid32,
+            steamid64,
             time,
             team: Team::None,
             state: player_state,
@@ -152,9 +157,9 @@ pub fn fn_status(
         }
 
         if p.time <= (settings.refresh_period * 1.5).ceil() as u32{
-            server.new_connections.push(p.steamid.clone());
+            server.new_connections.push(p.steamid32.clone());
         }
-        server.players.insert(p.steamid.clone(), p);
+        server.players.insert(p.steamid32.clone(), p);
     }
 }
 

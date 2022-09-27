@@ -1,4 +1,4 @@
-use std::{sync::mpsc::Receiver, error::Error};
+use std::{error::Error, sync::mpsc::Receiver};
 
 use regex::Regex;
 
@@ -6,12 +6,11 @@ use crate::{
     command_manager::{self, CommandManager},
     logwatcher::LogWatcher,
     player_checker::{PlayerChecker, PLAYER_LIST, REGEX_LIST},
-    regexes::{
-        fn_lobby, fn_status, LogMatcher, REGEX_LOBBY, REGEX_STATUS
-    },
+    regexes::{fn_lobby, fn_status, LogMatcher, REGEX_LOBBY, REGEX_STATUS},
     server::Server,
     settings::Settings,
-    timer::Timer, version::VersionResponse,
+    timer::Timer,
+    version::VersionResponse,
 };
 
 pub struct State {
@@ -31,6 +30,12 @@ pub struct State {
 
     pub latest_version: Option<Receiver<Result<VersionResponse, Box<dyn Error + Send>>>>,
     pub force_latest_version: bool,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl State {

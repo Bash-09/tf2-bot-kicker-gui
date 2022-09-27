@@ -1,7 +1,7 @@
 use std::ops::RangeInclusive;
 
 use clipboard::{ClipboardContext, ClipboardProvider};
-use egui::{Color32, ComboBox, Context, Id, Label, RichText, Separator, Ui, Stroke, Rounding};
+use egui::{Color32, ComboBox, Context, Id, Label, RichText, Separator, Ui};
 use glium_app::utils::persistent_window::{PersistentWindow, PersistentWindowManager};
 
 use crate::{
@@ -9,7 +9,8 @@ use crate::{
     logwatcher::LogWatcher,
     player_checker::PlayerRecord,
     server::player::{Player, PlayerState, PlayerType, Team},
-    state::State, version::{self, VersionResponse},
+    state::State,
+    version::{self, VersionResponse},
 };
 
 use self::{
@@ -34,13 +35,9 @@ pub fn render(
                 if ui.button("Set TF2 Directory").clicked() {
                     match rfd::FileDialog::new().pick_folder() {
                         Some(pb) => {
-                            let dir =  match pb.strip_prefix(std::env::current_dir().unwrap()) {
-                                Ok(pb) => {
-                                    pb.to_string_lossy().to_string()
-                                }
-                                Err(_) => {
-                                    pb.to_string_lossy().to_string()
-                                }
+                            let dir = match pb.strip_prefix(std::env::current_dir().unwrap()) {
+                                Ok(pb) => pb.to_string_lossy().to_string(),
+                                Err(_) => pb.to_string_lossy().to_string(),
                             };
                             state.settings.tf2_directory = dir;
                             state.log = LogWatcher::use_directory(&state.settings.tf2_directory);
@@ -67,12 +64,8 @@ pub fn render(
                     match rfd::FileDialog::new().set_directory("cfg").pick_file() {
                         Some(pb) => {
                             let dir = match pb.strip_prefix(std::env::current_dir().unwrap()) {
-                                Ok(pb) => {
-                                    pb.to_string_lossy().to_string()
-                                }
-                                Err(_) => {
-                                    pb.to_string_lossy().to_string()
-                                }
+                                Ok(pb) => pb.to_string_lossy().to_string(),
+                                Err(_) => pb.to_string_lossy().to_string(),
                             };
 
                             match state
@@ -375,7 +368,7 @@ fn render_players(
                     ui.set_width(width);
 
                     let text;
-                    if player.steamid == state.settings.user {
+                    if player.steamid32 == state.settings.user {
                         text = egui::RichText::new(truncate(&player.name, TRUNC_LEN))
                             .color(Color32::GREEN);
                     } else if player.player_type == PlayerType::Bot
@@ -391,37 +384,38 @@ fn render_players(
                     }
 
                     // Player Type combobox
-                    if player_type_combobox(&player.steamid, &mut player.player_type, ui) {
-                        if player.player_type == PlayerType::Player
-                            && player.notes.is_empty()
-                        {
-                            state.player_checker.players.remove(&player.steamid);
+                    if player_type_combobox(&player.steamid32, &mut player.player_type, ui) {
+                        if player.player_type == PlayerType::Player && player.notes.is_empty() {
+                            state.player_checker.players.remove(&player.steamid32);
                         } else {
                             state.player_checker.update_player(player);
                         }
                     }
 
                     // Player name button
-                    ui.style_mut().visuals.widgets.inactive.bg_fill = ui.style().visuals.window_fill();
-                    // ui.style_mut().visuals.widgets.inactive.bg_stroke = ui.style().visuals.widgets.open.bg_stroke;
-                    // ui.style_mut().visuals.widgets.hovered.bg_fill = ui.style().visuals.widgets.inactive.bg_fill;
-                    // ui.style_mut().visuals.widgets.inactive.bg_fill = ui.style().visuals.window_fill();
+                    ui.style_mut().visuals.widgets.inactive.bg_fill =
+                        ui.style().visuals.window_fill();
 
                     let header = ui.menu_button(text, |ui| {
-                        if ui.button("Copy SteamID").clicked() {
-                            let ctx: Result<
-                                ClipboardContext,
-                                Box<dyn std::error::Error>,
-                            > = ClipboardProvider::new();
-                            ctx.unwrap().set_contents(player.steamid.clone()).unwrap();
-                            log::info!("{}", format!("Copied \"{}\"", player.steamid));
+                        if ui.button("Copy SteamID32").clicked() {
+                            let ctx: Result<ClipboardContext, Box<dyn std::error::Error>> =
+                                ClipboardProvider::new();
+                            ctx.unwrap().set_contents(player.steamid32.clone()).unwrap();
+                            log::info!("{}", format!("Copied \"{}\"", player.steamid32));
+                        }
+
+                        if ui.button("Copy SteamID64").clicked() {
+                            let ctx: Result<ClipboardContext, Box<dyn std::error::Error>> =
+                                ClipboardProvider::new();
+                            ctx.unwrap()
+                                .set_contents(format!("{}", player.steamid64))
+                                .unwrap();
+                            log::info!("{}", format!("Copied \"{}\"", player.steamid64));
                         }
 
                         if ui.button("Copy Name").clicked() {
-                            let ctx: Result<
-                                ClipboardContext,
-                                Box<dyn std::error::Error>,
-                            > = ClipboardProvider::new();
+                            let ctx: Result<ClipboardContext, Box<dyn std::error::Error>> =
+                                ClipboardProvider::new();
                             ctx.unwrap().set_contents(player.name.clone()).unwrap();
                             log::info!("{}", format!("Copied \"{}\"", player.name));
                         }
@@ -430,7 +424,6 @@ fn render_players(
                         if ui.button("Edit Notes").clicked() {
                             windows.push(create_edit_notes_window(player.get_record()));
                         }
-
 
                         ui.menu_button(RichText::new("Other actions").color(Color32::RED), |ui| {
                             // Call votekick button
@@ -445,15 +438,16 @@ fn render_players(
                             if player.player_type == PlayerType::Bot
                                 || player.player_type == PlayerType::Cheater
                             {
-                                let but = ui
-                                    .button(RichText::new("Save Name").color(Color32::RED));
+                                let but = ui.button(RichText::new("Save Name").color(Color32::RED));
                                 if but.clicked() {
-                                    windows
-                                        .push(new_regex_window(player.get_export_regex()));
+                                    windows.push(new_regex_window(player.get_export_regex()));
                                 }
                                 but.on_hover_text(
-                                    RichText::new("Players with this name will always be recognized as a bot")
-                                    .color(Color32::RED));
+                                    RichText::new(
+                                        "Players with this name will always be recognized as a bot",
+                                    )
+                                    .color(Color32::RED),
+                                );
                             }
                         });
                     });
@@ -477,25 +471,22 @@ fn render_players(
 
                     // Cheater, Bot and Joining labels
                     ui.with_layout(egui::Layout::right_to_left(), |ui| {
-                        // ui.horizontal(|ui| {
-                            ui.add_space(15.0);
+                        ui.add_space(15.0);
 
-                            // Time
-                            ui.label(&format_time(player.time));
+                        // Time
+                        ui.label(&format_time(player.time));
 
+                        if !player.notes.is_empty() {
+                            ui.label("☑");
+                        }
 
-                            if !player.notes.is_empty() {
-                                ui.label("☑");
-                            }
-
-                            // Cheater / Bot / Joining
-                            if player.player_type != PlayerType::Player {
-                                ui.add(Label::new(player.player_type.rich_text()));
-                            }
-                            if player.state == PlayerState::Spawning {
-                                ui.add(Label::new(RichText::new("Joining").color(Color32::YELLOW)));
-                            }
-                        // });
+                        // Cheater / Bot / Joining
+                        if player.player_type != PlayerType::Player {
+                            ui.add(Label::new(player.player_type.rich_text()));
+                        }
+                        if player.state == PlayerState::Spawning {
+                            ui.add(Label::new(RichText::new("Joining").color(Color32::YELLOW)));
+                        }
                     });
                 });
             }

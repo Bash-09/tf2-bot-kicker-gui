@@ -28,6 +28,12 @@ pub struct PlayerChecker {
     pub players: HashMap<String, PlayerRecord>,
 }
 
+impl Default for PlayerChecker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PlayerChecker {
     pub fn new() -> PlayerChecker {
         PlayerChecker {
@@ -63,7 +69,7 @@ impl PlayerChecker {
     /// Loads a player's record from the persistent record if it exists and restores
     /// their data. e.g. marking the player as a bot or cheater or just
     pub fn check_player_steamid(&self, player: &mut Player) -> bool {
-        if let Some(record) = self.players.get(&player.steamid) {
+        if let Some(record) = self.players.get(&player.steamid32) {
             player.player_type = record.player_type;
             player.notes = record.notes.clone();
 

@@ -1,6 +1,6 @@
-use std::{sync::mpsc, error::Error};
+use std::{error::Error, sync::mpsc};
 
-use egui::{Id, Vec2, Align2};
+use egui::{Align2, Id, Vec2};
 use glium_app::utils::persistent_window::PersistentWindow;
 use serde_json::Value;
 
@@ -14,30 +14,32 @@ pub struct VersionResponse {
 }
 
 impl VersionResponse {
-
-    pub fn request_latest_version() -> std::sync::mpsc::Receiver<Result<VersionResponse, Box<dyn Error + Send>>> {
+    pub fn request_latest_version(
+    ) -> std::sync::mpsc::Receiver<Result<VersionResponse, Box<dyn Error + Send>>> {
         let (tx, rx) = mpsc::channel();
 
         std::thread::spawn(move || {
-
             let runtime = tokio::runtime::Builder::new_current_thread()
                 .enable_io()
                 .build()
                 .unwrap();
 
             runtime.block_on(async {
-                tx.send(VersionResponse::get_latest_version().await).unwrap();
+                tx.send(VersionResponse::get_latest_version().await)
+                    .unwrap();
             });
-
         });
 
         rx
     }
 
     async fn get_latest_version() -> Result<VersionResponse, Box<dyn Error + Send>> {
-        let release = match reqwest::Client::new().get("https://api.github.com/repos/Bash-09/tf2-bot-kicker-gui/releases/latest")
-                    .header("User-Agent", "tf2-bot-kicker-gui")
-                    .send().await {
+        let release = match reqwest::Client::new()
+            .get("https://api.github.com/repos/Bash-09/tf2-bot-kicker-gui/releases/latest")
+            .header("User-Agent", "tf2-bot-kicker-gui")
+            .send()
+            .await
+        {
             Ok(it) => it,
             Err(err) => return Err(Box::new(err)),
         };
@@ -51,7 +53,6 @@ impl VersionResponse {
             Err(err) => return Err(Box::new(err)),
         };
 
-        
         let version;
         if let Some(Value::String(v)) = json.get("tag_name") {
             version = v.to_string();
@@ -75,11 +76,12 @@ impl VersionResponse {
         Ok(response)
     }
 
-
     pub fn to_persistent_window(self) -> PersistentWindow<State> {
-        let file_names: Vec<String> = self.downloads.iter().map(|link| {
-            link.split('/').last().unwrap().to_string()
-        }).collect();
+        let file_names: Vec<String> = self
+            .downloads
+            .iter()
+            .map(|link| link.split('/').last().unwrap().to_string())
+            .collect();
 
         PersistentWindow::new(Box::new(move |id, _, ctx, state| {
             let mut open = true;
@@ -91,7 +93,6 @@ impl VersionResponse {
                 .resizable(false)
                 .open(&mut open)
                 .show(ctx, |ui| {
-
                     ui.heading(&format!("Current version: {}", VERSION));
                     ui.heading(&format!("Latest version:  {}", &self.version));
 
@@ -108,19 +109,22 @@ impl VersionResponse {
 
                     ui.horizontal(|ui| {
                         ui.label("Find the latest version on");
-                        ui.add(egui::Hyperlink::from_label_and_url("github", "https://github.com/Bash-09/tf2-bot-kicker-gui/releases/latest"));
+                        ui.add(egui::Hyperlink::from_label_and_url(
+                            "github",
+                            "https://github.com/Bash-09/tf2-bot-kicker-gui/releases/latest",
+                        ));
                     });
                     ui.add_space(10.0);
 
                     ui.label("Or download it directly:");
                     for (i, file) in file_names.iter().enumerate() {
-                        ui.add(egui::Hyperlink::from_label_and_url(file, &self.downloads[i]));
+                        ui.add(egui::Hyperlink::from_label_and_url(
+                            file,
+                            &self.downloads[i],
+                        ));
                     }
-
                 });
             open
         }))
     }
-
 }
-
