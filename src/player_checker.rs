@@ -193,7 +193,10 @@ impl PlayerChecker {
                 "Bot" => PlayerType::Bot,
                 "Cheater" => PlayerType::Cheater,
                 "Suspicious" => PlayerType::Suspicious,
-                _ => continue,
+                _ => {
+                    log::error!("Unexpected playertype: {}", player_type);
+                    continue;
+                }
             };
 
             let record = PlayerRecord {

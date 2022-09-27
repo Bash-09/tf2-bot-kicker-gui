@@ -18,7 +18,7 @@ pub mod version;
 
 use chrono::{DateTime, Local};
 use command_manager::CommandManager;
-use egui::{Align2, Vec2};
+use egui::{Align2, Vec2, Color32, Style, Visuals};
 use egui_winit::winit::{
     dpi::{PhysicalPosition, PhysicalSize},
     window::{Icon, WindowBuilder},
@@ -190,12 +190,20 @@ impl Application for TF2BotKicker {
             None => {}
         }
 
-        // Kick Bots
+        // Kick Bots and Cheaters
         if !state.settings.paused {
             if state.kick_timer.update() {
-                state
-                    .server
-                    .kick_players_of_type(&state.settings, &mut self.cmd, PlayerType::Bot);
+                if state.settings.kick_bots {
+                    state
+                        .server
+                        .kick_players_of_type(&state.settings, &mut self.cmd, PlayerType::Bot);
+                }
+
+                if state.settings.kick_cheaters {
+                    state
+                        .server
+                        .kick_players_of_type(&state.settings, &mut self.cmd, PlayerType::Cheater);
+                }
             }
 
             if state.alert_timer.update() {

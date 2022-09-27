@@ -77,3 +77,7 @@ infZ111 \#SaveTaiwan
 infZ111
 Professional Bully
 P\w+ B\w+ \#SaveTF2
+^jd$
+Professional Sniping 24/7
+Skilight
+Vinesauce

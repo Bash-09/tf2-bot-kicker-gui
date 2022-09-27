@@ -215,7 +215,9 @@ pub fn recent_players_window() -> PersistentWindow<State> {
                     ui.set_width(width);
 
                     // Render players
-                    for player in state.server.previous_players.inner().range(range) {
+                    for i in range {
+                        let player = &state.server.previous_players.inner()[state.server.previous_players.inner().len() - i - 1];
+
                         ui.horizontal(|ui| {
                             ui.set_width(width);
 
