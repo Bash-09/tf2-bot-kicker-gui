@@ -20,6 +20,7 @@ pub const COM_LOBBY: &str = "tf_lobby_debug";
 pub struct Server {
     pub players: HashMap<String, Player>,
     pub new_connections: Vec<String>,
+    pub pending_lookup: Vec<String>,
     pub previous_players: RingBuffer<Player>,
 }
 
@@ -28,6 +29,7 @@ impl Server {
         Server {
             players: HashMap::with_capacity(24),
             new_connections: Vec::new(),
+            pending_lookup: Vec::new(),
             previous_players: RingBuffer::new(48),
         }
     }

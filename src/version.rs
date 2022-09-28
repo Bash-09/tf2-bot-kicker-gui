@@ -1,4 +1,4 @@
-use std::{error::Error, sync::mpsc};
+use std::error::Error;
 
 use egui::{Align2, Id, Vec2};
 use glium_app::utils::persistent_window::PersistentWindow;
@@ -15,8 +15,8 @@ pub struct VersionResponse {
 
 impl VersionResponse {
     pub fn request_latest_version(
-    ) -> std::sync::mpsc::Receiver<Result<VersionResponse, Box<dyn Error + Send>>> {
-        let (tx, rx) = mpsc::channel();
+    ) -> crossbeam_channel::Receiver<Result<VersionResponse, Box<dyn Error + Send>>> {
+        let (tx, rx) = crossbeam_channel::unbounded();
 
         std::thread::spawn(move || {
             let runtime = tokio::runtime::Builder::new_current_thread()

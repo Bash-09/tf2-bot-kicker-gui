@@ -62,8 +62,8 @@ pub fn fn_status(
     cmd: &mut CommandManager,
 ) {
     let steamid32 = caps[3].to_string();
-    let steamid64 = steamid_32_to_64(&steamid32).unwrap_or(0);
-    if steamid64 == 0 {
+    let steamid64 = steamid_32_to_64(&steamid32).unwrap_or_default();
+    if steamid64.is_empty() {
         log::error!("Could not convert steamid32 to steamid64: {}", steamid32);
     }
 
@@ -132,7 +132,12 @@ pub fn fn_status(
             accounted: true,
             stolen_name,
             common_name: false,
+
+            account_info: None,
         };
+
+        server.pending_lookup.push(p.steamid64.clone());
+
 
         if player_checker.check_player_steamid(&mut p) {
             log::info!("Known {:?} joining: {}", p.player_type, p.name);
@@ -159,6 +164,7 @@ pub fn fn_status(
         if p.time <= (settings.refresh_period * 1.5).ceil() as u32{
             server.new_connections.push(p.steamid32.clone());
         }
+
         server.players.insert(p.steamid32.clone(), p);
     }
 }

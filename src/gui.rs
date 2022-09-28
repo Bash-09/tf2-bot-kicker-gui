@@ -10,7 +10,7 @@ use crate::{
     player_checker::PlayerRecord,
     server::player::{Player, PlayerState, PlayerType, Team},
     state::State,
-    version::{self, VersionResponse},
+    version::{self, VersionResponse}, steamapi,
 };
 
 use self::{
@@ -117,6 +117,10 @@ pub fn render(
             if ui.button("Check for updates").clicked() && state.latest_version.is_none() {
                 state.latest_version = Some(VersionResponse::request_latest_version());
                 state.force_latest_version = true;
+            }
+
+            if ui.button("Steam API").clicked() {
+                windows.push(steamapi::create_set_api_key_window(state.settings.steamapi_key.clone()));
             }
         });
     });
@@ -408,7 +412,7 @@ fn render_players(
                             let ctx: Result<ClipboardContext, Box<dyn std::error::Error>> =
                                 ClipboardProvider::new();
                             ctx.unwrap()
-                                .set_contents(format!("{}", player.steamid64))
+                                .set_contents(player.steamid64.clone())
                                 .unwrap();
                             log::info!("{}", format!("Copied \"{}\"", player.steamid64));
                         }
@@ -452,9 +456,16 @@ fn render_players(
                         });
                     });
 
-                    // Notes / Stolen name warning
-                    if player.stolen_name || !player.notes.is_empty() {
-                        header.response.on_hover_ui(|ui| {
+                    header.response.on_hover_ui(|ui| {
+
+                        if let Some((summary, bans, friends)) = &player.account_info {
+                            ui.label(&summary.personaname);
+                        } else {
+                            ui.label("Couldn't fetch steam data");
+                        }
+
+                        // Notes / Stolen name warning
+                        if player.stolen_name || !player.notes.is_empty() {
                             if player.stolen_name {
                                 ui.label(
                                     RichText::new(
@@ -466,8 +477,8 @@ fn render_players(
                             if !player.notes.is_empty() {
                                 ui.label(&player.notes);
                             }
-                        });
-                    }
+                        }
+                    });
 
                     // Cheater, Bot and Joining labels
                     ui.with_layout(egui::Layout::right_to_left(), |ui| {

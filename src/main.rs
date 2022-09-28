@@ -1,9 +1,11 @@
 #![feature(hash_drain_filter)]
+#![feature(scoped_threads)]
 
 extern crate chrono;
 extern crate env_logger;
 extern crate rfd;
 extern crate serde;
+extern crate steam_api;
 
 pub mod command_manager;
 pub mod gui;
@@ -15,9 +17,11 @@ pub mod settings;
 pub mod state;
 pub mod timer;
 pub mod version;
+pub mod steamapi;
 
 use chrono::{DateTime, Local};
 use command_manager::CommandManager;
+use crossbeam_channel::TryRecvError;
 use egui::{Align2, Vec2};
 use egui_winit::winit::{
     dpi::{PhysicalPosition, PhysicalSize},
@@ -37,7 +41,7 @@ use image::{EncodableLayout, ImageFormat};
 use player_checker::{PLAYER_LIST, REGEX_LIST};
 use server::{player::PlayerType, *};
 use state::State;
-use std::{io::Cursor, sync::mpsc::TryRecvError, time::SystemTime};
+use std::{io::Cursor, time::SystemTime};
 use version::VersionResponse;
 mod regexes;
 
@@ -163,6 +167,15 @@ impl Application for TF2BotKicker {
                     state.latest_version = None;
                 }
                 Err(TryRecvError::Empty) => {}
+            }
+        }
+
+        while let Some(steamid64) = state.server.pending_lookup.pop() {
+            state.steamapi_request_sender.send(steamid64).ok();
+        }
+        while let Ok(account_info) = state.steamapi_request_receiver.try_recv() {
+            if let Some(p) = state.server.players.get_mut(&player::steamid_64_to_32(&account_info.0.steamid).unwrap_or_default()) {
+                p.account_info = Some(account_info);
             }
         }
 

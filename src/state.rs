@@ -1,5 +1,6 @@
-use std::{error::Error, sync::mpsc::Receiver};
+use std::error::Error;
 
+use crossbeam_channel::{Receiver, Sender};
 use regex::Regex;
 
 use crate::{
@@ -10,7 +11,7 @@ use crate::{
     server::Server,
     settings::Settings,
     timer::Timer,
-    version::VersionResponse,
+    version::VersionResponse, steamapi::{AccountInfoReceiver, self},
 };
 
 pub struct State {
@@ -30,6 +31,9 @@ pub struct State {
 
     pub latest_version: Option<Receiver<Result<VersionResponse, Box<dyn Error + Send>>>>,
     pub force_latest_version: bool,
+
+    pub steamapi_request_sender: Sender<String>,
+    pub steamapi_request_receiver: AccountInfoReceiver,
 }
 
 impl Default for State {
@@ -78,6 +82,8 @@ impl State {
 
         let log = LogWatcher::use_directory(&settings.tf2_directory);
 
+        let (steamapi_request_sender, steamapi_request_receiver) = steamapi::create_api_thread(settings.steamapi_key.clone());
+
         State {
             refresh_timer: Timer::new(),
             alert_timer: Timer::new(),
@@ -93,6 +99,9 @@ impl State {
             player_checker,
             latest_version: None,
             force_latest_version: false,
+
+            steamapi_request_sender,
+            steamapi_request_receiver,
         }
     }
 

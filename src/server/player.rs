@@ -1,7 +1,9 @@
 use core::fmt;
 
+
 use egui::{Color32, RichText, Ui};
 use serde::Serialize;
+use steam_api::structs::{friends, bans, summaries};
 
 use crate::player_checker::PlayerRecord;
 
@@ -73,7 +75,7 @@ pub struct Player {
     pub userid: String,
     pub name: String,
     pub steamid32: String,
-    pub steamid64: u64,
+    pub steamid64: String,
     pub time: u32,
     pub team: Team,
     pub state: PlayerState,
@@ -83,6 +85,8 @@ pub struct Player {
     pub accounted: bool,
     pub stolen_name: bool,
     pub common_name: bool,
+
+    pub account_info: Option<(summaries::User, bans::User, Vec<friends::User>)>,
 }
 
 impl std::fmt::Display for Player {
@@ -113,7 +117,7 @@ impl Player {
     }
 }
 
-pub fn steamid_32_to_64(steamid32: &str) -> Option<u64> {
+pub fn steamid_32_to_64(steamid32: &str) -> Option<String> {
     let segments: Vec<&str> = steamid32.split(':').collect();
 
     let id32: u64 = if let Ok(id32) = segments.get(2)?.parse() {
@@ -122,5 +126,10 @@ pub fn steamid_32_to_64(steamid32: &str) -> Option<u64> {
         return None;
     };
 
-    Some(id32 + 76561197960265728)
+    Some(format!("{}", id32 + 76561197960265728))
+}
+
+pub fn steamid_64_to_32(steamid64: &str) -> Result<String, std::num::ParseIntError> {
+    let id64: u64 = steamid64.parse()?;
+    Ok(format!("U:1:{}", id64 - 76561197960265728))
 }
