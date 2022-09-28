@@ -35,7 +35,7 @@ pub fn create_api_thread(key: String) -> (Sender<String>, AccountInfoReceiver) {
                             let mut summary = match steam_api::get_player_summaries(&steamid, &key) {
                                 Ok(summary) => summary,
                                 Err(e) => {
-                                    log::error!("Failed to get steam account summary: {}", e);
+                                    log::error!("Failed to get account summary: {}", e);
                                     Vec::new()
                                 }
                             };
@@ -46,7 +46,7 @@ pub fn create_api_thread(key: String) -> (Sender<String>, AccountInfoReceiver) {
                             let mut bans = match steam_api::get_player_bans(&steamid, &key) {
                                 Ok(summary) => summary,
                                 Err(e) => {
-                                    log::error!("Failed to get steam account summary: {}", e);
+                                    log::error!("Failed to get account bans: {}", e);
                                     Vec::new()
                                 }
                             };
@@ -58,7 +58,7 @@ pub fn create_api_thread(key: String) -> (Sender<String>, AccountInfoReceiver) {
                                 match steam_api::get_friends_list(&steamid, &key) {
                                     Ok(friends) => friends,
                                     Err(e) => {
-                                        log::error!("Failed to get steam account summary: {}", e);
+                                        log::warn!("Failed to get friends list: {}", e);
                                         Vec::new()
                                     }
                                 }

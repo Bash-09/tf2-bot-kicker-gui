@@ -1,5 +1,6 @@
 use std::ops::RangeInclusive;
 
+use chrono::{Utc, NaiveDateTime};
 use clipboard::{ClipboardContext, ClipboardProvider};
 use egui::{Color32, ComboBox, Context, Id, Label, RichText, Separator, Ui};
 use glium_app::utils::persistent_window::{PersistentWindow, PersistentWindowManager};
@@ -429,6 +430,10 @@ fn render_players(
                             windows.push(create_edit_notes_window(player.get_record()));
                         }
 
+                        if let Some((summary, _, _)) = &player.account_info {
+                            ui.hyperlink_to("Visit profile", &summary.profileurl);
+                        }
+
                         ui.menu_button(RichText::new("Other actions").color(Color32::RED), |ui| {
                             // Call votekick button
                             if ui
@@ -457,27 +462,7 @@ fn render_players(
                     });
 
                     header.response.on_hover_ui(|ui| {
-
-                        if let Some((summary, bans, friends)) = &player.account_info {
-                            ui.label(&summary.personaname);
-                        } else {
-                            ui.label("Couldn't fetch steam data");
-                        }
-
-                        // Notes / Stolen name warning
-                        if player.stolen_name || !player.notes.is_empty() {
-                            if player.stolen_name {
-                                ui.label(
-                                    RichText::new(
-                                        "A player with this name is already on the server.",
-                                    )
-                                    .color(Color32::YELLOW),
-                                );
-                            }
-                            if !player.notes.is_empty() {
-                                ui.label(&player.notes);
-                            }
-                        }
+                        render_player_info(ui, player);
                     });
 
                     // Cheater, Bot and Joining labels
@@ -486,6 +471,15 @@ fn render_players(
 
                         // Time
                         ui.label(&format_time(player.time));
+
+                        if let Some((_, bans, _)) = &player.account_info {
+                            if bans.VACBanned {
+                                ui.label(RichText::new("V").color(Color32::RED));
+                            }
+                            if bans.NumberOfGameBans > 0 {
+                                ui.label(RichText::new("G").color(Color32::RED));
+                            }
+                        }
 
                         if !player.notes.is_empty() {
                             ui.label("☑");
@@ -585,4 +579,65 @@ pub fn player_type_combobox(id: &str, player_type: &mut PlayerType, ui: &mut Ui)
                 .clicked();
         });
     changed
+}
+
+pub fn render_player_info(ui: &mut Ui, player: &Player) {
+    if let Some((summary, bans, friends)) = &player.account_info {
+        
+        ui.horizontal(|ui| {
+            // TODO - add profile picture here
+            ui.add_space(64.0);
+
+            ui.vertical(|ui| {
+                ui.label(&format!("Name: {}", &summary.personaname));
+                ui.label(&format!("Profile Visibility: {}", 
+                    match summary.communityvisibilitystate {
+                        1 => "Private",
+                        2 => "Friends-only",
+                        3 => "Public",
+                        _ => "Invalid value",
+                    }
+                ));
+
+                if let Some(time) = summary.timecreated {
+                    let age = Utc::now().naive_local().signed_duration_since(NaiveDateTime::from_timestamp(time as i64, 0));
+                    let years = age.num_days() / 365;
+                    let days = age.num_days() - years * 365;
+
+                    if years > 0 {
+                        ui.label(&format!("Profile Age: {} years, {} days", years, days));
+                    } else {
+                        ui.label(&format!("Account Age: {} days", days));
+                    }
+                }
+
+                if bans.VACBanned {
+                    ui.label(RichText::new(&format!("This player has VAC bans: {}", bans.NumberOfVACBans)).color(Color32::RED));
+                }
+
+                if bans.NumberOfGameBans > 0 {
+                    ui.label(RichText::new(&format!("This player has Game bans: {}", bans.NumberOfGameBans)).color(Color32::RED));
+                }
+            });
+        });
+    } else {
+        ui.label("Couldn't fetch steam data");
+    }
+
+    // Notes / Stolen name warning
+    if player.stolen_name || !player.notes.is_empty() {
+        ui.add_space(10.0);
+
+        if player.stolen_name {
+            ui.label(
+                RichText::new(
+                    "A player with this name is already on the server.",
+                )
+                .color(Color32::YELLOW),
+            );
+        }
+        if !player.notes.is_empty() {
+            ui.label(&player.notes);
+        }
+    }
 }
