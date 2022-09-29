@@ -134,6 +134,7 @@ pub fn fn_status(
             common_name: false,
 
             account_info: None,
+            profile_image: None,
         };
 
         server.pending_lookup.push(p.steamid64.clone());

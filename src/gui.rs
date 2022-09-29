@@ -2,7 +2,7 @@ use std::ops::RangeInclusive;
 
 use chrono::{Utc, NaiveDateTime};
 use clipboard::{ClipboardContext, ClipboardProvider};
-use egui::{Color32, ComboBox, Context, Id, Label, RichText, Separator, Ui};
+use egui::{Color32, ComboBox, Context, Id, Label, RichText, Separator, Ui, Vec2};
 use glium_app::utils::persistent_window::{PersistentWindow, PersistentWindowManager};
 
 use crate::{
@@ -585,12 +585,13 @@ pub fn render_player_info(ui: &mut Ui, player: &Player) {
     if let Some((summary, bans, friends)) = &player.account_info {
         
         ui.horizontal(|ui| {
-            // TODO - add profile picture here
-            ui.add_space(64.0);
+            if let Some(profile_img) = &player.profile_image {
+                profile_img.show_size(ui, Vec2::new(64.0, 64.0));
+            }
 
             ui.vertical(|ui| {
-                ui.label(&format!("Name: {}", &summary.personaname));
-                ui.label(&format!("Profile Visibility: {}", 
+                ui.label(&summary.personaname);
+                ui.label(&format!("Profile: {}", 
                     match summary.communityvisibilitystate {
                         1 => "Private",
                         2 => "Friends-only",
@@ -605,7 +606,7 @@ pub fn render_player_info(ui: &mut Ui, player: &Player) {
                     let days = age.num_days() - years * 365;
 
                     if years > 0 {
-                        ui.label(&format!("Profile Age: {} years, {} days", years, days));
+                        ui.label(&format!("Account Age: {} years, {} days", years, days));
                     } else {
                         ui.label(&format!("Account Age: {} days", days));
                     }

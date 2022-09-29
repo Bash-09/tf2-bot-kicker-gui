@@ -173,9 +173,11 @@ impl Application for TF2BotKicker {
         while let Some(steamid64) = state.server.pending_lookup.pop() {
             state.steamapi_request_sender.send(steamid64).ok();
         }
-        while let Ok(account_info) = state.steamapi_request_receiver.try_recv() {
-            if let Some(p) = state.server.players.get_mut(&player::steamid_64_to_32(&account_info.0.steamid).unwrap_or_default()) {
-                p.account_info = Some(account_info);
+        while let Ok((summary, bans, friends, profile)) = state.steamapi_request_receiver.try_recv() {
+            if let Some(p) = state.server.players.get_mut(&player::steamid_64_to_32(&summary.steamid).unwrap_or_default()) {
+                p.account_info = Some((summary, bans, friends));
+
+                p.profile_image = profile;
             }
         }
 

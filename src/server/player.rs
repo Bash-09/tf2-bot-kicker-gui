@@ -2,6 +2,7 @@ use core::fmt;
 
 
 use egui::{Color32, RichText, Ui};
+use egui_extras::RetainedImage;
 use serde::Serialize;
 use steam_api::structs::{friends, bans, summaries};
 
@@ -87,6 +88,7 @@ pub struct Player {
     pub common_name: bool,
 
     pub account_info: Option<(summaries::User, bans::User, Vec<friends::User>)>,
+    pub profile_image: Option<RetainedImage>,
 }
 
 impl std::fmt::Display for Player {

@@ -1,14 +1,15 @@
 use std::thread;
 
-use crossbeam_channel::{Sender, Receiver, unbounded, TryRecvError, RecvError};
+use crossbeam_channel::{Sender, Receiver, unbounded};
 use egui::Id;
+use egui_extras::RetainedImage;
 use glium_app::utils::persistent_window::PersistentWindow;
 use steam_api::structs::{summaries, friends, bans};
 
 use crate::state::State;
 
-pub type AccountInfoReceiver = Receiver<(summaries::User, bans::User, Vec<friends::User>)>;
-pub type AccountInfoSender = Sender<(summaries::User, bans::User, Vec<friends::User>)>;
+pub type AccountInfoReceiver = Receiver<(summaries::User, bans::User, Vec<friends::User>, Option<RetainedImage>)>;
+pub type AccountInfoSender = Sender<(summaries::User, bans::User, Vec<friends::User>, Option<RetainedImage>)>;
 
 pub fn create_api_thread(key: String) -> (Sender<String>, AccountInfoReceiver) {
 
@@ -66,7 +67,17 @@ pub fn create_api_thread(key: String) -> (Sender<String>, AccountInfoReceiver) {
                                 Vec::new()
                             };
 
-                            response_s.send((summary.remove(0), bans.remove(0), friends)).unwrap();
+                            let img = if let Ok(img_response) = reqwest::blocking::get(&summary[0].avatarmedium) {
+                                if let Ok(img) = RetainedImage::from_image_bytes(&summary[0].steamid, &img_response.bytes().unwrap_or_default()) {
+                                    Some(img)
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            };
+
+                            response_s.send((summary.remove(0), bans.remove(0), friends, img)).unwrap();
                         });
                     },
                 }
