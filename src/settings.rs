@@ -36,6 +36,7 @@ pub struct Settings {
     pub mark_name_stealers: bool,
 
     pub ignore_version: String,
+    pub ignore_no_api_key: bool,
 }
 
 impl Settings {
@@ -70,6 +71,7 @@ impl Settings {
 
             mark_name_stealers: true,
             ignore_version: String::new(),
+            ignore_no_api_key: false,
         }
     }
 
@@ -136,6 +138,8 @@ impl Settings {
         set.mark_name_stealers = json["mark_name_stealers"]
             .as_bool()
             .unwrap_or(set.mark_name_stealers);
+
+        set.ignore_no_api_key = json["ignore_no_api_key"].as_bool().unwrap_or(set.ignore_no_api_key);
 
         Ok(set)
     }

@@ -11,7 +11,7 @@ use crate::{
     player_checker::PlayerRecord,
     server::player::{Player, PlayerState, PlayerType, Team},
     state::State,
-    version::{self, VersionResponse}, steamapi,
+    version::{self, VersionResponse}, steamapi::{self, AccountInfo},
 };
 
 use self::{
@@ -211,6 +211,11 @@ pub fn render(
 
     // Main window with info and players
     egui::CentralPanel::default().show(gui_ctx, |ui| {
+
+        if state.is_demo() {
+            render_players(ui, state, windows, cmd);
+            return;
+        }
 
         if state.log.is_none() {
             ui.label("No valid TF2 directory set. (It should be the one inside \"common\")\n\n");
@@ -430,8 +435,15 @@ fn render_players(
                             windows.push(create_edit_notes_window(player.get_record()));
                         }
 
-                        if let Some((summary, _, _)) = &player.account_info {
-                            ui.hyperlink_to("Visit profile", &summary.profileurl);
+                        if !state.settings.steamapi_key.is_empty() {
+                            let refresh_button = ui.button("Refresh profile info");
+                            if refresh_button.clicked() {
+                                state.steamapi_request_sender.send(player.steamid64.clone()).ok();
+                            }
+                        }
+
+                        if let Some(Ok(account_info)) = &player.account_info {
+                            ui.hyperlink_to("Visit profile", &account_info.summary.profileurl);
                         }
 
                         ui.menu_button(RichText::new("Other actions").color(Color32::RED), |ui| {
@@ -461,9 +473,11 @@ fn render_players(
                         });
                     });
 
-                    header.response.on_hover_ui(|ui| {
-                        render_player_info(ui, player);
-                    });
+                    if !state.settings.steamapi_key.is_empty() || !player.notes.is_empty() || player.stolen_name {
+                        header.response.on_hover_ui(|ui| {
+                            render_player_info(ui, player, !state.settings.steamapi_key.is_empty());
+                        });
+                    }
 
                     // Cheater, Bot and Joining labels
                     ui.with_layout(egui::Layout::right_to_left(), |ui| {
@@ -472,17 +486,17 @@ fn render_players(
                         // Time
                         ui.label(&format_time(player.time));
 
-                        if let Some((_, bans, _)) = &player.account_info {
-                            if bans.VACBanned {
-                                ui.label(RichText::new("V").color(Color32::RED));
-                            }
-                            if bans.NumberOfGameBans > 0 {
-                                ui.label(RichText::new("G").color(Color32::RED));
-                            }
-                        }
-
                         if !player.notes.is_empty() {
                             ui.label("☑");
+                        }
+
+                        if let Some(Ok(info)) = &player.account_info {
+                            if info.bans.VACBanned {
+                                ui.label(RichText::new("V").color(Color32::RED));
+                            }
+                            if info.bans.NumberOfGameBans > 0 {
+                                ui.label(RichText::new("G").color(Color32::RED));
+                            }
                         }
 
                         // Cheater / Bot / Joining
@@ -581,53 +595,63 @@ pub fn player_type_combobox(id: &str, player_type: &mut PlayerType, ui: &mut Ui)
     changed
 }
 
-pub fn render_player_info(ui: &mut Ui, player: &Player) {
-    if let Some((summary, bans, friends)) = &player.account_info {
-        
-        ui.horizontal(|ui| {
-            if let Some(profile_img) = &player.profile_image {
-                profile_img.show_size(ui, Vec2::new(64.0, 64.0));
+pub fn render_player_info(ui: &mut Ui, player: &Player, api_key_set: bool) {
+    if api_key_set {
+        if let Some(info_request) = &player.account_info {
+            match info_request {
+                Ok(info) => {
+                    let AccountInfo {summary, bans, friends: _} = info;
+                    
+                    ui.horizontal(|ui| {
+                        if let Some(profile_img) = &player.profile_image {
+                            profile_img.show_size(ui, Vec2::new(64.0, 64.0));
+                        }
+
+                        ui.vertical(|ui| {
+                            ui.label(&summary.personaname);
+                            ui.label(&format!("Profile: {}", 
+                                match summary.communityvisibilitystate {
+                                    1 => "Private",
+                                    2 => "Friends-only",
+                                    3 => "Public",
+                                    _ => "Invalid value",
+                                }
+                            ));
+
+                            if let Some(time) = summary.timecreated {
+                                let age = Utc::now().naive_local().signed_duration_since(NaiveDateTime::from_timestamp(time as i64, 0));
+                                let years = age.num_days() / 365;
+                                let days = age.num_days() - years * 365;
+
+                                if years > 0 {
+                                    ui.label(&format!("Account Age: {} years, {} days", years, days));
+                                } else {
+                                    ui.label(&format!("Account Age: {} days", days));
+                                }
+                            }
+
+                            if bans.VACBanned {
+                                ui.label(RichText::new(&format!("This player has VAC bans: {}", bans.NumberOfVACBans)).color(Color32::RED));
+                            }
+
+                            if bans.NumberOfGameBans > 0 {
+                                ui.label(RichText::new(&format!("This player has Game bans: {}", bans.NumberOfGameBans)).color(Color32::RED));
+                            }
+                        });
+                    });
+                },
+                Err(e) => {
+                    ui.label(&format!("Could not fetch steam profile: {}", e));
+                }
             }
-
-            ui.vertical(|ui| {
-                ui.label(&summary.personaname);
-                ui.label(&format!("Profile: {}", 
-                    match summary.communityvisibilitystate {
-                        1 => "Private",
-                        2 => "Friends-only",
-                        3 => "Public",
-                        _ => "Invalid value",
-                    }
-                ));
-
-                if let Some(time) = summary.timecreated {
-                    let age = Utc::now().naive_local().signed_duration_since(NaiveDateTime::from_timestamp(time as i64, 0));
-                    let years = age.num_days() / 365;
-                    let days = age.num_days() - years * 365;
-
-                    if years > 0 {
-                        ui.label(&format!("Account Age: {} years, {} days", years, days));
-                    } else {
-                        ui.label(&format!("Account Age: {} days", days));
-                    }
-                }
-
-                if bans.VACBanned {
-                    ui.label(RichText::new(&format!("This player has VAC bans: {}", bans.NumberOfVACBans)).color(Color32::RED));
-                }
-
-                if bans.NumberOfGameBans > 0 {
-                    ui.label(RichText::new(&format!("This player has Game bans: {}", bans.NumberOfGameBans)).color(Color32::RED));
-                }
-            });
-        });
-    } else {
-        ui.label("Couldn't fetch steam data");
+        }
     }
 
     // Notes / Stolen name warning
     if player.stolen_name || !player.notes.is_empty() {
-        ui.add_space(10.0);
+        if api_key_set {
+            ui.add_space(10.0);
+        }
 
         if player.stolen_name {
             ui.label(

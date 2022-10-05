@@ -177,7 +177,7 @@ impl Server {
         match self.players.get(&settings.user) {
             Some(user) => {
                 if (invaders && defenders) || user.team == Team::None {
-                    message.push_str("the server: ");
+                    message.push_str("both teams: ");
                 } else if (invaders && user.team == Team::Invaders)
                     || (defenders && user.team == Team::Defenders)
                 {
@@ -210,6 +210,12 @@ impl Server {
 
         // Send message
         cmd.send_chat(&message);
+    }
+
+    /// Create and add a demo player to the server list to test with
+    pub fn add_demo_player(&mut self, name: String, steamid32: String, team: Team) {
+        let player = player::create_demo_player(name, steamid32, team);
+        self.players.insert(player.steamid32.clone(), player);
     }
 }
 

@@ -81,3 +81,5 @@ P\w+ B\w+ \#SaveTF2
 Professional Sniping 24/7
 Skilight
 Vinesauce
+^\(?\d?\)?ASS$
+ASSIA BOT TOUR

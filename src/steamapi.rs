@@ -8,8 +8,14 @@ use steam_api::structs::{summaries, friends, bans};
 
 use crate::state::State;
 
-pub type AccountInfoReceiver = Receiver<(summaries::User, bans::User, Vec<friends::User>, Option<RetainedImage>)>;
-pub type AccountInfoSender = Sender<(summaries::User, bans::User, Vec<friends::User>, Option<RetainedImage>)>;
+pub struct AccountInfo {
+    pub summary: summaries::User,
+    pub bans:    bans::User,
+    pub friends: Option<Result<Vec<friends::User>, reqwest::Error>>,
+}
+
+pub type AccountInfoReceiver = Receiver<(Option<Result<AccountInfo, reqwest::Error>>, Option<RetainedImage>, String)>;
+pub type AccountInfoSender = Sender<(Option<Result<AccountInfo, reqwest::Error>>, Option<RetainedImage>, String)>;
 
 pub fn create_api_thread(key: String) -> (Sender<String>, AccountInfoReceiver) {
 
@@ -31,44 +37,51 @@ pub fn create_api_thread(key: String) -> (Sender<String>, AccountInfoReceiver) {
 
                         // On receiving a request, dispatch it on a new thread.
                         s.spawn(|| {
-                            let steamid = steamid;
-                            
-                            let mut summary = match steam_api::get_player_summaries(&steamid, &key) {
-                                Ok(summary) => summary,
-                                Err(e) => {
-                                    log::error!("Failed to get account summary: {}", e);
-                                    Vec::new()
+
+                            // Summary
+                            let summary = steam_api::get_player_summaries(&steamid, &key).map(|mut summaries| {
+                                if summaries.is_empty() {
+                                    log::error!("Steam account summary returned empty");
+                                    response_s.send((None, None, steamid.clone())).unwrap();
                                 }
-                            };
-                            if summary.is_empty() {
+                                summaries.remove(0)
+                            });
+                            if let Err(e) = summary {
+                                response_s.send((Some(Err(e)), None, steamid.clone())).unwrap();
                                 return;
                             }
+                            let summary = summary.unwrap();
 
-                            let mut bans = match steam_api::get_player_bans(&steamid, &key) {
-                                Ok(summary) => summary,
-                                Err(e) => {
-                                    log::error!("Failed to get account bans: {}", e);
-                                    Vec::new()
+                            // Bans
+                            let bans = steam_api::get_player_bans(&steamid, &key).map(|mut bans| {
+                                if bans.is_empty() {
+                                    log::error!("Steam account bans returned empty");
+                                    response_s.send((None, None, steamid.clone())).unwrap();
                                 }
-                            };
-                            if bans.is_empty() {
+                                bans.remove(0)
+                            });
+                            if let Err(e) = bans {
+                                response_s.send((Some(Err(e)), None, steamid.clone())).unwrap();
                                 return;
                             }
+                            let bans = bans.unwrap();
 
-                            let friends = if summary[0].communityvisibilitystate != 3 {
-                                match steam_api::get_friends_list(&steamid, &key) {
-                                    Ok(friends) => friends,
-                                    Err(e) => {
-                                        log::warn!("Failed to get friends list: {}", e);
-                                        Vec::new()
-                                    }
-                                }
+                            // Friends
+                            let friends = if summary.communityvisibilitystate != 3 {
+                                Some(steam_api::get_friends_list(&steamid, &key))
                             } else {
-                                Vec::new()
+                                None
                             };
 
-                            let img = if let Ok(img_response) = reqwest::blocking::get(&summary[0].avatarmedium) {
-                                if let Ok(img) = RetainedImage::from_image_bytes(&summary[0].steamid, &img_response.bytes().unwrap_or_default()) {
+                            let info = AccountInfo {
+                                summary,
+                                bans,
+                                friends,
+                            };
+
+                            // Profile image
+                            let img = if let Ok(img_response) = reqwest::blocking::get(&info.summary.avatarmedium) {
+                                if let Ok(img) = RetainedImage::from_image_bytes(&info.summary.steamid, &img_response.bytes().unwrap_or_default()) {
                                     Some(img)
                                 } else {
                                     None
@@ -77,7 +90,7 @@ pub fn create_api_thread(key: String) -> (Sender<String>, AccountInfoReceiver) {
                                 None
                             };
 
-                            response_s.send((summary.remove(0), bans.remove(0), friends, img)).unwrap();
+                            response_s.send((Some(Ok(info)), img, steamid)).unwrap();
                         });
                     },
                 }
@@ -100,23 +113,31 @@ pub fn create_set_api_key_window(mut key: String) -> PersistentWindow<State> {
             .collapsible(false)
             .resizable(false)
             .show(gui_ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.label("Get your own Steam Web API key");
-                ui.hyperlink_to("here", "https://steamcommunity.com/dev/apikey");
-            });
 
-            ui.text_edit_singleline(&mut key);
-    
-            if ui.button("Apply").clicked() {
-                saved = true;
+                ui.label("Adding a Steam Web API key allows the app to look up profile information about players. This provides a link to their profile and lets you view names, profile pictures, VAC and game bans, and sometimes account age and any friends on the server.");
+                ui.separator();
 
-                state.settings.steamapi_key = key.clone();
-                (state.steamapi_request_sender, state.steamapi_request_receiver) = create_api_thread(key.clone());
+                ui.horizontal(|ui| {
+                    ui.label("Get your own Steam Web API key");
+                    ui.hyperlink_to("here", "https://steamcommunity.com/dev/apikey");
+                });
 
-                for p in state.server.players.values() {
-                    state.steamapi_request_sender.send(p.steamid64.clone()).ok();
+                ui.text_edit_singleline(&mut key);
+
+                if key.is_empty() {
+                    ui.checkbox(&mut state.settings.ignore_no_api_key, "Don't remind me.");
                 }
-            }
+        
+                if ui.button("Apply").clicked() {
+                    saved = true;
+
+                    state.settings.steamapi_key = key.clone();
+                    (state.steamapi_request_sender, state.steamapi_request_receiver) = create_api_thread(key.clone());
+
+                    for p in state.server.players.values() {
+                        state.steamapi_request_sender.send(p.steamid64.clone()).ok();
+                    }
+                }
         });
 
         open && !saved

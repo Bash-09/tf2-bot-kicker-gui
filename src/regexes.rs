@@ -139,7 +139,6 @@ pub fn fn_status(
 
         server.pending_lookup.push(p.steamid64.clone());
 
-
         if player_checker.check_player_steamid(&mut p) {
             log::info!("Known {:?} joining: {}", p.player_type, p.name);
         } 

@@ -48,7 +48,7 @@ mod regexes;
 fn main() {
     env_logger::init();
 
-    let app = TF2BotKicker::new();
+    let app = TF2BotKicker::new(std::env::var("DEMO").is_ok());
 
     let inner_size = PhysicalSize::new(
         app.state.settings.window.width,
@@ -91,14 +91,14 @@ pub struct TF2BotKicker {
 
 impl Default for TF2BotKicker {
     fn default() -> Self {
-        Self::new()
+        Self::new(false)
     }
 }
 
 impl TF2BotKicker {
     // Create the application
-    pub fn new() -> TF2BotKicker {
-        let state = State::new();
+    pub fn new(demo_mode: bool) -> TF2BotKicker {
+        let state = State::new(demo_mode);
 
         let cmd = CommandManager::new(&state.settings.rcon_password);
 
@@ -117,6 +117,9 @@ impl Application for TF2BotKicker {
         self.state.alert_timer.reset();
 
         self.state.latest_version = Some(VersionResponse::request_latest_version());
+        if !self.state.settings.ignore_no_api_key && self.state.settings.steamapi_key.is_empty() {
+            self.windows.push(steamapi::create_set_api_key_window(String::new()));
+        }
     }
 
     fn update(&mut self, _t: &glium_app::Timer, ctx: &mut Context) {
@@ -170,14 +173,19 @@ impl Application for TF2BotKicker {
             }
         }
 
+        // Send steamid requests if an API key is set
+        if state.settings.steamapi_key.is_empty() {
+            state.server.pending_lookup.clear();
+        }
         while let Some(steamid64) = state.server.pending_lookup.pop() {
             state.steamapi_request_sender.send(steamid64).ok();
         }
-        while let Ok((summary, bans, friends, profile)) = state.steamapi_request_receiver.try_recv() {
-            if let Some(p) = state.server.players.get_mut(&player::steamid_64_to_32(&summary.steamid).unwrap_or_default()) {
-                p.account_info = Some((summary, bans, friends));
 
-                p.profile_image = profile;
+        // Handle finished steamid requests
+        while let Ok((info, img, steamid)) = state.steamapi_request_receiver.try_recv() {
+            if let Some(p) = state.server.players.get_mut(&player::steamid_64_to_32(&steamid).unwrap_or_default()) {
+                p.account_info = info;
+                p.profile_image = img;
             }
         }
 

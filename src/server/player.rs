@@ -4,9 +4,8 @@ use core::fmt;
 use egui::{Color32, RichText, Ui};
 use egui_extras::RetainedImage;
 use serde::Serialize;
-use steam_api::structs::{friends, bans, summaries};
 
-use crate::player_checker::PlayerRecord;
+use crate::{player_checker::PlayerRecord, steamapi::AccountInfo};
 
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum Team {
@@ -87,7 +86,7 @@ pub struct Player {
     pub stolen_name: bool,
     pub common_name: bool,
 
-    pub account_info: Option<(summaries::User, bans::User, Vec<friends::User>)>,
+    pub account_info: Option<Result<AccountInfo, reqwest::Error>>,
     pub profile_image: Option<RetainedImage>,
 }
 
@@ -116,6 +115,29 @@ impl Player {
             player_type: self.player_type,
             notes: self.notes.clone(),
         }
+    }
+}
+
+pub fn create_demo_player(name: String, steamid32: String, team: Team) -> Player {
+    let steamid64 = steamid_32_to_64(&steamid32).unwrap_or_default();
+
+    Player {
+        userid: String::from("0"),
+        name,
+        steamid32,
+        steamid64,
+        time: 69,
+        team,
+        state: PlayerState::Active,
+        player_type: PlayerType::Player,
+        notes: String::new(),
+
+        accounted: true,
+        stolen_name: false,
+        common_name: false,
+
+        account_info: None,
+        profile_image: None,
     }
 }
 
