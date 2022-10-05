@@ -367,7 +367,7 @@ fn render_players(
             let mut playerlist: Vec<&mut Player> = state.server.players.values_mut().collect();
             playerlist.sort_by(|a, b| b.time.cmp(&a.time));
 
-            for player in playerlist {
+            for (i, player) in playerlist.iter_mut().enumerate() {
                 let team_ui = match player.team {
                     Team::Invaders => &mut cols[0],
                     Team::Defenders => &mut cols[1],
@@ -377,6 +377,7 @@ fn render_players(
                 team_ui.horizontal(|ui| {
                     ui.set_width(width);
 
+                    // Construct player name
                     let text;
                     if player.steamid32 == state.settings.user {
                         text = egui::RichText::new(truncate(&player.name, TRUNC_LEN))
@@ -406,7 +407,28 @@ fn render_players(
                     ui.style_mut().visuals.widgets.inactive.bg_fill =
                         ui.style().visuals.window_fill();
 
+                    // Context menu (actually a menu button) for useful actions
+                    let mut menu_open = false;
                     let header = ui.menu_button(text, |ui| {
+                        // Don't show the hover ui if a menu is open, otherwise it can overlap the
+                        // currently open manu and be annoying
+                        menu_open = true;
+
+                        // Workaround to prevent opening a menu button then hovering a different
+                        // one changing the source of the menu
+                        match state.ui_context_menu_open {
+                            None => {
+                                state.ui_context_menu_open = Some(i);
+                            },
+                            Some(id) => {
+                                if id != i {
+                                    state.ui_context_menu_open = None;
+                                    ui.close_menu();
+                                    return;
+                                }
+                            }
+                        }
+
                         if ui.button("Copy SteamID32").clicked() {
                             let ctx: Result<ClipboardContext, Box<dyn std::error::Error>> =
                                 ClipboardProvider::new();
@@ -447,6 +469,7 @@ fn render_players(
                         }
 
                         ui.menu_button(RichText::new("Other actions").color(Color32::RED), |ui| {
+
                             // Call votekick button
                             if ui
                                 .button(RichText::new("Call votekick").color(Color32::RED))
@@ -473,7 +496,11 @@ fn render_players(
                         });
                     });
 
-                    if !state.settings.steamapi_key.is_empty() || !player.notes.is_empty() || player.stolen_name {
+                    // Don't show the hover ui if a menu is open, otherwise it can overlap the
+                    // currently open manu and be annoying. Only show the hover menu if there are
+                    // steam details (arrived or outstanding doesn't matter) or there is
+                    // information to show (i.e. notes or stolen name notification)
+                    if (!state.settings.steamapi_key.is_empty() || !player.notes.is_empty() || player.stolen_name) && !menu_open {
                         header.response.on_hover_ui(|ui| {
                             render_player_info(ui, player, !state.settings.steamapi_key.is_empty());
                         });
@@ -486,10 +513,12 @@ fn render_players(
                         // Time
                         ui.label(&format_time(player.time));
 
+                        // Notes indicator
                         if !player.notes.is_empty() {
                             ui.label("☑");
                         }
 
+                        // VAC and game bans
                         if let Some(Ok(info)) = &player.account_info {
                             if info.bans.VACBanned {
                                 ui.label(RichText::new("V").color(Color32::RED));

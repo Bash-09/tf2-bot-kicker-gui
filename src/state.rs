@@ -36,6 +36,8 @@ pub struct State {
     pub steamapi_request_receiver: AccountInfoReceiver,
 
     demo_mode: bool,
+
+    pub ui_context_menu_open: Option<usize>,
 }
 
 impl Default for State {
@@ -122,6 +124,8 @@ impl State {
             steamapi_request_receiver,
 
             demo_mode,
+
+            ui_context_menu_open: None,
         }
     }
 
