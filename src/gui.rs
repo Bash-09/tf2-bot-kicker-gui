@@ -496,6 +496,10 @@ fn render_players(
                         });
                     });
 
+                    if header.response.clicked_elsewhere() {
+                        state.ui_context_menu_open = None;
+                    }
+
                     // Don't show the hover ui if a menu is open, otherwise it can overlap the
                     // currently open manu and be annoying. Only show the hover menu if there are
                     // steam details (arrived or outstanding doesn't matter) or there is
