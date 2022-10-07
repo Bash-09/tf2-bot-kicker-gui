@@ -19,12 +19,15 @@ rcon = { version = "0.6.0", features = ["rt-tokio"] }
 tokio = { version = "1", features = ["full"] }
 async-trait = "0.1.52"
 reqwest = "0.11.11"
+steam-api = "0.4.1"
+crossbeam-channel = "0.5.6"
 
 glium = "0.31"
 glium_app = { git = "https://github.com/Bash-09/glium-app" }
 egui = "0.17.0"
 egui-winit = { version = "0.17.0", default-features = false }
 egui_glium = { version = "0.17.0", default-features = false, features = ["clipboard", "epi", "links"]}
+egui_extras = { version = "0.17.0", features = ["image"]}
 
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.73"
@@ -37,4 +40,4 @@ regex = "1.5.4"
 
 log = "*"
 env_logger = "*"
-image = "0.24.2"
+image = { version = "0.24.2", features = ["jpeg", "png"] }

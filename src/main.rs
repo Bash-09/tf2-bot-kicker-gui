@@ -1,9 +1,11 @@
 #![feature(hash_drain_filter)]
+#![feature(scoped_threads)]
 
 extern crate chrono;
 extern crate env_logger;
 extern crate rfd;
 extern crate serde;
+extern crate steam_api;
 
 pub mod command_manager;
 pub mod gui;
@@ -15,10 +17,12 @@ pub mod settings;
 pub mod state;
 pub mod timer;
 pub mod version;
+pub mod steamapi;
 
 use chrono::{DateTime, Local};
 use command_manager::CommandManager;
-use egui::{Align2, Vec2, Color32, Style, Visuals};
+use crossbeam_channel::TryRecvError;
+use egui::{Align2, Vec2};
 use egui_winit::winit::{
     dpi::{PhysicalPosition, PhysicalSize},
     window::{Icon, WindowBuilder},
@@ -28,21 +32,23 @@ use glium::{
     Display,
 };
 use glium_app::{
-    context::Context, run_with_context, utils::persistent_window::{PersistentWindowManager, PersistentWindow},
+    context::Context,
+    run_with_context,
+    utils::persistent_window::{PersistentWindow, PersistentWindowManager},
     Application,
 };
 use image::{EncodableLayout, ImageFormat};
 use player_checker::{PLAYER_LIST, REGEX_LIST};
 use server::{player::PlayerType, *};
 use state::State;
+use std::{io::Cursor, time::SystemTime};
 use version::VersionResponse;
-use std::{io::Cursor, time::SystemTime, sync::mpsc::TryRecvError};
 mod regexes;
 
 fn main() {
     env_logger::init();
 
-    let app = TF2BotKicker::new();
+    let app = TF2BotKicker::new(std::env::var("DEMO").is_ok());
 
     let inner_size = PhysicalSize::new(
         app.state.settings.window.width,
@@ -83,10 +89,16 @@ pub struct TF2BotKicker {
     windows: PersistentWindowManager<State>,
 }
 
+impl Default for TF2BotKicker {
+    fn default() -> Self {
+        Self::new(false)
+    }
+}
+
 impl TF2BotKicker {
     // Create the application
-    pub fn new() -> TF2BotKicker {
-        let state = State::new();
+    pub fn new(demo_mode: bool) -> TF2BotKicker {
+        let state = State::new(demo_mode);
 
         let cmd = CommandManager::new(&state.settings.rcon_password);
 
@@ -105,6 +117,9 @@ impl Application for TF2BotKicker {
         self.state.alert_timer.reset();
 
         self.state.latest_version = Some(VersionResponse::request_latest_version());
+        if !self.state.settings.ignore_no_api_key && self.state.settings.steamapi_key.is_empty() {
+            self.windows.push(steamapi::create_set_api_key_window(String::new()));
+        }
     }
 
     fn update(&mut self, _t: &glium_app::Timer, ctx: &mut Context) {
@@ -117,9 +132,16 @@ impl Application for TF2BotKicker {
         if let Some(latest) = &mut state.latest_version {
             match latest.try_recv() {
                 Ok(Ok(latest)) => {
-                    log::debug!("Got latest version of application, current: {}, latest: {}", version::VERSION, latest.version);
+                    log::debug!(
+                        "Got latest version of application, current: {}, latest: {}",
+                        version::VERSION,
+                        latest.version
+                    );
 
-                    if latest.version != version::VERSION && (latest.version != state.settings.ignore_version || state.force_latest_version) {
+                    if latest.version != version::VERSION
+                        && (latest.version != state.settings.ignore_version
+                            || state.force_latest_version)
+                    {
                         windows.push(latest.to_persistent_window());
                         state.force_latest_version = false;
                     } else if state.force_latest_version {
@@ -130,7 +152,7 @@ impl Application for TF2BotKicker {
                                 .resizable(false)
                                 .open(&mut open)
                                 .anchor(Align2::CENTER_CENTER, Vec2::new(0.0, 0.0))
-                                .show(ctx, |ui|{
+                                .show(ctx, |ui| {
                                     ui.label("You already have the latest version.");
                                 });
                             open
@@ -138,16 +160,32 @@ impl Application for TF2BotKicker {
                     }
 
                     state.latest_version = None;
-                },
-                Ok(Err(e)) => { 
+                }
+                Ok(Err(e)) => {
                     log::error!("Error getting latest version: {:?}", e);
                     state.latest_version = None;
-                },
-                Err(TryRecvError::Disconnected) =>  {
+                }
+                Err(TryRecvError::Disconnected) => {
                     log::error!("Error getting latest version, other thread did not respond");
                     state.latest_version = None;
-                },
-                Err(TryRecvError::Empty) => {},
+                }
+                Err(TryRecvError::Empty) => {}
+            }
+        }
+
+        // Send steamid requests if an API key is set
+        if state.settings.steamapi_key.is_empty() {
+            state.server.pending_lookup.clear();
+        }
+        while let Some(steamid64) = state.server.pending_lookup.pop() {
+            state.steamapi_request_sender.send(steamid64).ok();
+        }
+
+        // Handle finished steamid requests
+        while let Ok((info, img, steamid)) = state.steamapi_request_receiver.try_recv() {
+            if let Some(p) = state.server.players.get_mut(&player::steamid_64_to_32(&steamid).unwrap_or_default()) {
+                p.account_info = info;
+                p.profile_image = img;
             }
         }
 
@@ -194,15 +232,19 @@ impl Application for TF2BotKicker {
         if !state.settings.paused {
             if state.kick_timer.update() {
                 if state.settings.kick_bots {
-                    state
-                        .server
-                        .kick_players_of_type(&state.settings, &mut self.cmd, PlayerType::Bot);
+                    state.server.kick_players_of_type(
+                        &state.settings,
+                        &mut self.cmd,
+                        PlayerType::Bot,
+                    );
                 }
 
                 if state.settings.kick_cheaters {
-                    state
-                        .server
-                        .kick_players_of_type(&state.settings, &mut self.cmd, PlayerType::Cheater);
+                    state.server.kick_players_of_type(
+                        &state.settings,
+                        &mut self.cmd,
+                        PlayerType::Cheater,
+                    );
                 }
             }
 

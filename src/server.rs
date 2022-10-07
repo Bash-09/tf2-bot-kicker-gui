@@ -20,6 +20,7 @@ pub const COM_LOBBY: &str = "tf_lobby_debug";
 pub struct Server {
     pub players: HashMap<String, Player>,
     pub new_connections: Vec<String>,
+    pub pending_lookup: Vec<String>,
     pub previous_players: RingBuffer<Player>,
 }
 
@@ -28,6 +29,7 @@ impl Server {
         Server {
             players: HashMap::with_capacity(24),
             new_connections: Vec::new(),
+            pending_lookup: Vec::new(),
             previous_players: RingBuffer::new(48),
         }
     }
@@ -118,7 +120,6 @@ impl Server {
     }
 
     pub fn send_chat_messages(&mut self, settings: &Settings, cmd: &mut CommandManager) {
-
         let mut message = String::new();
 
         let mut bots = false;
@@ -176,13 +177,13 @@ impl Server {
         match self.players.get(&settings.user) {
             Some(user) => {
                 if (invaders && defenders) || user.team == Team::None {
-                    message.push_str("the server: ");
+                    message.push_str("both teams: ");
                 } else if (invaders && user.team == Team::Invaders)
                     || (defenders && user.team == Team::Defenders)
                 {
                     message.push_str("our team: ");
                 } else if (invaders && user.team == Team::Defenders)
-                    || (defenders && user.team == Team::Invaders) 
+                    || (defenders && user.team == Team::Invaders)
                 {
                     message.push_str("the enemy team: ");
                 } else {
@@ -209,6 +210,12 @@ impl Server {
 
         // Send message
         cmd.send_chat(&message);
+    }
+
+    /// Create and add a demo player to the server list to test with
+    pub fn add_demo_player(&mut self, name: String, steamid32: String, team: Team) {
+        let player = player::create_demo_player(name, steamid32, team);
+        self.players.insert(player.steamid32.clone(), player);
     }
 }
 

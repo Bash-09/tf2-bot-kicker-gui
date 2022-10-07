@@ -1,17 +1,17 @@
-use std::{sync::mpsc::Receiver, error::Error};
+use std::error::Error;
 
+use crossbeam_channel::{Receiver, Sender};
 use regex::Regex;
 
 use crate::{
     command_manager::{self, CommandManager},
     logwatcher::LogWatcher,
     player_checker::{PlayerChecker, PLAYER_LIST, REGEX_LIST},
-    regexes::{
-        fn_lobby, fn_status, LogMatcher, REGEX_LOBBY, REGEX_STATUS
-    },
-    server::Server,
+    regexes::{fn_lobby, fn_status, LogMatcher, REGEX_LOBBY, REGEX_STATUS},
+    server::{Server, player::Team},
     settings::Settings,
-    timer::Timer, version::VersionResponse,
+    timer::Timer,
+    version::VersionResponse, steamapi::{AccountInfoReceiver, self},
 };
 
 pub struct State {
@@ -31,10 +31,23 @@ pub struct State {
 
     pub latest_version: Option<Receiver<Result<VersionResponse, Box<dyn Error + Send>>>>,
     pub force_latest_version: bool,
+
+    pub steamapi_request_sender: Sender<String>,
+    pub steamapi_request_receiver: AccountInfoReceiver,
+
+    demo_mode: bool,
+
+    pub ui_context_menu_open: Option<usize>,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self::new(false)
+    }
 }
 
 impl State {
-    pub fn new() -> State {
+    pub fn new(demo_mode: bool) -> State {
         let settings: Settings;
 
         // Attempt to load settings, create new default settings if it can't load an existing file
@@ -73,6 +86,24 @@ impl State {
 
         let log = LogWatcher::use_directory(&settings.tf2_directory);
 
+        let (steamapi_request_sender, steamapi_request_receiver) = steamapi::create_api_thread(settings.steamapi_key.clone());
+
+        let mut server = Server::new();
+
+        if demo_mode {
+            // Add demo players to server
+            server.add_demo_player("Bash09".to_string(), "U:1:103663727".to_string(), Team::Invaders);
+            server.add_demo_player("Baan".to_string(), "U:1:130631917".to_string(), Team::Defenders);
+            server.add_demo_player("Random bot".to_string(), "U:1:1314494843".to_string(), Team::Defenders);
+            server.add_demo_player("SmooveB".to_string(), "U:1:16722748".to_string(), Team::Invaders);
+            server.add_demo_player("Some cunt".to_string(), "U:1:95849406".to_string(), Team::Invaders);
+
+            for p in server.players.values_mut() {
+                steamapi_request_sender.send(p.steamid64.clone()).ok();
+                player_checker.check_player_steamid(p);
+            }
+        }
+
         State {
             refresh_timer: Timer::new(),
             alert_timer: Timer::new(),
@@ -80,7 +111,7 @@ impl State {
 
             settings,
             log,
-            server: Server::new(),
+            server,
 
             regx_status,
             regx_lobby,
@@ -88,11 +119,26 @@ impl State {
             player_checker,
             latest_version: None,
             force_latest_version: false,
+
+            steamapi_request_sender,
+            steamapi_request_receiver,
+
+            demo_mode,
+
+            ui_context_menu_open: None,
         }
+    }
+
+    pub fn is_demo(&self) -> bool {
+        self.demo_mode
     }
 
     /// Begins a refresh on the local server state, any players unaccounted for since the last time this function was called will be removed.
     pub fn refresh(&mut self, cmd: &mut CommandManager) {
+        if self.demo_mode {
+            return;
+        }
+
         if cmd.connected(&self.settings.rcon_password).is_err() {
             return;
         }
