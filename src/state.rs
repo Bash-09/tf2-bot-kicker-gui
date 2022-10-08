@@ -97,6 +97,7 @@ impl State {
             server.add_demo_player("Random bot".to_string(), "U:1:1314494843".to_string(), Team::Defenders);
             server.add_demo_player("SmooveB".to_string(), "U:1:16722748".to_string(), Team::Invaders);
             server.add_demo_player("Some cunt".to_string(), "U:1:95849406".to_string(), Team::Invaders);
+            server.add_demo_player("ASS".to_string(), "U:1:1203248403".to_string(), Team::Defenders);
 
             for p in server.players.values_mut() {
                 steamapi_request_sender.send(p.steamid64.clone()).ok();

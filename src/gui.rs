@@ -674,7 +674,11 @@ pub fn render_player_info(ui: &mut Ui, player: &Player, api_key_set: bool) {
                     });
                 },
                 Err(e) => {
+                    let string = format!("{}", e);
                     ui.label(&format!("Could not fetch steam profile: {}", e));
+                    if string.contains("missing field `profilestate`") {
+                        ui.label("Profile may not be set up.");
+                    }
                 }
             }
         }
