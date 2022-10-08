@@ -114,7 +114,7 @@ pub fn create_set_api_key_window(mut key: String) -> PersistentWindow<State> {
             .resizable(false)
             .show(gui_ctx, |ui| {
 
-                ui.label("Adding a Steam Web API key allows the app to look up profile information about players. This provides a link to their profile and lets you view names, profile pictures, VAC and game bans, and sometimes account age and any friends on the server.");
+                ui.label("Adding a Steam Web API key allows the app to look up profile information about players. This provides a link to their profile and lets you view names, profile pictures, VAC and game bans, and sometimes account age.");
                 ui.separator();
 
                 ui.horizontal(|ui| {

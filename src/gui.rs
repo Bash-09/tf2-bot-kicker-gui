@@ -642,14 +642,15 @@ pub fn render_player_info(ui: &mut Ui, player: &Player, api_key_set: bool) {
 
                         ui.vertical(|ui| {
                             ui.label(&summary.personaname);
-                            ui.label(&format!("Profile: {}", 
-                                match summary.communityvisibilitystate {
-                                    1 => "Private",
-                                    2 => "Friends-only",
-                                    3 => "Public",
-                                    _ => "Invalid value",
-                                }
-                            ));
+                            ui.horizontal(|ui| {
+                                ui.label("Profile: ");
+                                ui.label(match summary.communityvisibilitystate {
+                                    1 => RichText::new("Private").color(Color32::RED),
+                                    2 => RichText::new("Friends-only").color(Color32::YELLOW),
+                                    3 => RichText::new("Public").color(Color32::GREEN),
+                                    _ => RichText::new("Invalid value"),
+                                });
+                            });
 
                             if let Some(time) = summary.timecreated {
                                 let age = Utc::now().naive_local().signed_duration_since(NaiveDateTime::from_timestamp(time as i64, 0));
@@ -669,6 +670,10 @@ pub fn render_player_info(ui: &mut Ui, player: &Player, api_key_set: bool) {
 
                             if bans.NumberOfGameBans > 0 {
                                 ui.label(RichText::new(&format!("This player has Game bans: {}", bans.NumberOfGameBans)).color(Color32::RED));
+                            }
+
+                            if bans.VACBanned || bans.NumberOfGameBans > 0 {
+                                ui.label(RichText::new(&format!("Days since last ban: {}", bans.DaysSinceLastBan)).color(Color32::RED));
                             }
                         });
                     });

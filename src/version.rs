@@ -6,7 +6,7 @@ use serde_json::Value;
 
 use crate::state::State;
 
-pub const VERSION: &str = "v1.2.4";
+pub const VERSION: &str = "v1.3.0";
 
 pub struct VersionResponse {
     pub version: String,
