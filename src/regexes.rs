@@ -141,15 +141,19 @@ pub fn fn_status(
             p.player_type = record.player_type;
             p.notes = record.notes;
             log::info!("Known {:?} joining: {}", p.player_type, p.name);
+
+            if let Some(regx) = player_checker.check_player_name(&p.name) {
+                p.common_name = true;
+            }
         } 
-        if let Some(regx) = player_checker.check_player_name(&p.steamid32) {
+        if let Some(regx) = player_checker.check_player_name(&p.name) {
             p.player_type = PlayerType::Bot;
             p.common_name = true;
             if p.notes.is_empty() {
                 p.notes = format!("Matched regex {}", regx.as_str());
             }
 
-            server.update_player_from_record(p.get_record());
+            player_checker.update_player_record(p.get_record());
             log::info!("Unknown {:?} joining: {}", p.player_type, p.name);
         }
 
