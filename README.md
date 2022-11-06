@@ -16,15 +16,16 @@ This program operates using features already included in the Source engine as in
 
 # Usage
 
-Download the program from [here.](https://github.com/Googe14/tf2-bot-kicker-gui/releases)
+Download the program from [here](https://github.com/Googe14/tf2-bot-kicker-gui/releases).
+
+
+1. Add the following 3 lines to your TF2 autoexec.cfg (You can choose anything for the rcon_password, you will just have to set it when you start the program)
 
 ```
 ip 0.0.0.0
 rcon_password tf2bk
 net_start
 ```
-
-1. Add the above 3 lines to your TF2 autoexec.cfg (You can choose anything for the rcon_password, you will just have to set it when you start the program)
 2. Add `-condebug -conclearlog -usercon` to your TF2 launch options. (Right click Team Fortress 2 in your Steam library, select Properties, and paste into the Launch Options section)
 3. Launch TF2.
 4. Run the program and set your TF2 directory.
@@ -47,6 +48,7 @@ To reset your settings, delete the `settings.json` file in the `cfg` folder.
 * `Announce Bots` - Send chat messages indicating bots joining the server.
 * `Announce Cheaters` - Send chat messages indicating cheaters joining the server (If both bot and cheater announcements are enabled they will be combined into singular chat messages).
 * `Announce Name-stealing` - Announce when a bot changes it's name to another player's name (will check for invisible characters in their name as well). Hopefully this is no longer needed with Valve's recent patches.
+* `Ignore Bots with common names` - Don't bother to announce bots who's name matches a regex. Can be used to still announce bots with unpredictable names without spamming the chat that another m4gic is joining the game.
 * `Chat Message Period` - Time in seconds between sending chat messages.
 ### Bot Detection
 * `Mark accounts with a stolen name as bots` - Enable accounts that steal another player's name to be automatically marked as a bot.
@@ -61,7 +63,10 @@ Any saved regexes or players can be accessed/added/editted/deleted from the `Sav
 A list of accounts is stored in `cfg/playerlist.json` containing the SteamID, player type (Player/Bot/Cheater) and any recorded notes for that account. When players join the server their steamid is matched against this list to determine if they are a bot or cheater and will take appropriate action (send chat messages, kick, etc). If they are not a know account their name will be checked against a list of regexes in case they have a common bot name (e.g. DoesHotter).
 
 # Building
-This program should build without issue through Cargo on Windows, on Linux some libraries may need to be installed.
+
+Enable rust nightly: `rustup default nightly`
+
+This program should then build without issue through Cargo, on Linux some libraries may need to be installed.
 
 # How it works
  
