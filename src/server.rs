@@ -42,10 +42,11 @@ impl Server {
         let mut players: HashMap<String, Player> = HashMap::new();
         std::mem::swap(&mut players, &mut self.players);
 
-        let previous_players = self.previous_players.inner_mut();
-        previous_players.append(&mut players.into_values().collect());
-        while previous_players.len() > RINGBUFFER_LEN {
-            previous_players.pop_back();
+        for p in players.into_values() {
+            for prev in self.previous_players.inner() {
+                if p.steamid32 == prev.steamid32 { break; }
+            }
+            self.previous_players.push(p);
         }
 
         self.new_connections.clear();
@@ -69,6 +70,9 @@ impl Server {
 
     pub fn remove_player(&mut self, steamid32: &Steamid32) {
         if let Some(player) = self.players.remove(steamid32) {
+            for prev in self.previous_players.inner() {
+                if prev.steamid32 == player.steamid32 {return;}
+            }
             self.previous_players.push(player);
         }
     }
@@ -165,6 +169,9 @@ impl Server {
             !v.accounted
         }) {
             log::info!("Pruning player {}", &p.name);
+            for prev in self.previous_players.inner() {
+                if p.steamid32 == prev.steamid32 {continue;}
+            }
             self.previous_players.push(p);
         }
     }

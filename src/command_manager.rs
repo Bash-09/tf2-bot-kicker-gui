@@ -89,7 +89,7 @@ impl CommandManager {
     }
 
     pub fn kick_player(&mut self, player_userid: &str, reason: KickReason) -> Option<String> {
-        let command = format!("callvote kick \"{}\" \"{}\"", player_userid, reason);
+        let command = format!("callvote kick \"{} {}\"", player_userid, reason);
         self.run_command(&command)
     }
 
