@@ -83,3 +83,4 @@ Skilight
 Vinesauce
 ^\(?\d?\)?ASS$
 ASSIA BOT TOUR
+ASSIA TOUR

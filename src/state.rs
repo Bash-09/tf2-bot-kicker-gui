@@ -155,12 +155,6 @@ impl State {
 
         let lobby = lobby.unwrap();
 
-        // Not connected to valid server
-        if lobby.contains("Failed to find lobby shared object") {
-            self.server.clear();
-            return;
-        }
-
         self.server.refresh();
 
         // Parse players from tf_lobby_debug output
