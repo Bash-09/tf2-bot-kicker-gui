@@ -9,7 +9,7 @@ use std::path::Path;
 use regex::Regex;
 use serde::Serialize;
 
-use crate::server::player::PlayerType;
+use crate::server::player::{PlayerType, Steamid32};
 
 use super::player::Player;
 
@@ -48,35 +48,19 @@ impl PlayerChecker {
     /// a note appended to them indicating the regex that caught them.
     ///
     /// Returns true if a regex was matched and false otherwise.
-    pub fn check_player_name(&mut self, player: &mut Player) -> bool {
+    pub fn check_player_name(&mut self, name: &str) -> Option<&Regex> {
         for regx in self.bots_regx.iter() {
-            if regx.captures(&player.name).is_some() {
-                player.player_type = PlayerType::Bot;
-                player.common_name = true;
-
-                let note = format!("Matched bot regex: {}", regx.as_str());
-                if player.notes.is_empty() {
-                    player.notes.push_str(&note);
-                }
-
-                self.update_player(player);
-                return true;
+            if regx.captures(name).is_some() {
+                return Some(regx);
             }
         }
-        false
+        None
     }
 
     /// Loads a player's record from the persistent record if it exists and restores
     /// their data. e.g. marking the player as a bot or cheater or just
-    pub fn check_player_steamid(&self, player: &mut Player) -> bool {
-        if let Some(record) = self.players.get(&player.steamid32) {
-            player.player_type = record.player_type;
-            player.notes = record.notes.clone();
-
-            return true;
-        }
-
-        false
+    pub fn check_player_steamid(&self, steamid: &Steamid32) -> Option<PlayerRecord> {
+        self.players.get(steamid).cloned()
     }
 
     /// Inserts the player into the saved record of players

@@ -7,21 +7,25 @@ use player::Player;
 use player::PlayerState;
 
 use crate::command_manager::CommandManager;
+use crate::command_manager::KickReason;
+use crate::player_checker::PlayerRecord;
 use crate::ringbuffer::RingBuffer;
 
 use self::player::PlayerType;
+use self::player::Steamid32;
 use self::player::Team;
 
 use super::settings::Settings;
 
 pub const COM_STATUS: &str = "status";
 pub const COM_LOBBY: &str = "tf_lobby_debug";
+const RINGBUFFER_LEN: usize = 48;
 
 pub struct Server {
-    pub players: HashMap<String, Player>,
+    players: HashMap<String, Player>,
     pub new_connections: Vec<String>,
     pub pending_lookup: Vec<String>,
-    pub previous_players: RingBuffer<Player>,
+    previous_players: RingBuffer<Player>,
 }
 
 impl Server {
@@ -30,13 +34,43 @@ impl Server {
             players: HashMap::with_capacity(24),
             new_connections: Vec::new(),
             pending_lookup: Vec::new(),
-            previous_players: RingBuffer::new(48),
+            previous_players: RingBuffer::new(RINGBUFFER_LEN),
         }
     }
 
     pub fn clear(&mut self) {
-        self.players.clear();
+        let mut players: HashMap<String, Player> = HashMap::new();
+        std::mem::swap(&mut players, &mut self.players);
+
+        let previous_players = self.previous_players.inner_mut();
+        previous_players.append(&mut players.into_values().collect());
+        while previous_players.len() > RINGBUFFER_LEN {
+            previous_players.pop_back();
+        }
+
         self.new_connections.clear();
+    }
+
+    pub fn get_players(&self) -> &HashMap<String, Player> {
+        &self.players
+    }
+
+    pub fn get_previous_players(&self) -> &RingBuffer<Player> {
+        &self.previous_players
+    }
+
+    pub fn get_player_mut(&mut self, steamid: &Steamid32) -> Option<&mut Player> {
+        self.players.get_mut(steamid)
+    }
+
+    pub fn add_player(&mut self, player: Player) {
+        self.players.insert(player.steamid32.clone(), player);
+    }
+
+    pub fn remove_player(&mut self, steamid32: &Steamid32) {
+        if let Some(player) = self.players.remove(steamid32) {
+            self.previous_players.push(player);
+        }
     }
 
     pub fn get_bots(&self) -> Vec<&Player> {
@@ -49,6 +83,22 @@ impl Server {
         }
 
         bots
+    }
+
+    /// Updating any existing copies of a player (in current players or recent players) to match
+    /// the provided PlayerRecord
+    pub fn update_player_from_record(&mut self, record: PlayerRecord) {
+        for p in self.previous_players.inner_mut() {
+            if p.steamid32 == record.steamid {
+                p.player_type = record.player_type;
+                p.notes = record.notes.clone();
+            }
+        }
+
+        if let Some(p) = self.players.get_mut(&record.steamid) {
+            p.player_type = record.player_type;
+            p.notes = record.notes;
+        }
     }
 
     /// Call a votekick on any players detected as bots.
@@ -82,11 +132,11 @@ impl Server {
             match self.players.get(&settings.user) {
                 Some(user) => {
                     if user.team == p.team {
-                        cmd.kick_player(&p.userid);
+                        cmd.kick_player(&p.userid, KickReason::Cheating);
                     }
                 }
                 None => {
-                    cmd.kick_player(&p.userid);
+                    cmd.kick_player(&p.userid, KickReason::Cheating);
                 }
             }
         }

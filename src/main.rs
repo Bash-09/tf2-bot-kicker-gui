@@ -183,7 +183,7 @@ impl Application for TF2BotKicker {
 
         // Handle finished steamid requests
         while let Ok((info, img, steamid)) = state.steamapi_request_receiver.try_recv() {
-            if let Some(p) = state.server.players.get_mut(&player::steamid_64_to_32(&steamid).unwrap_or_default()) {
+            if let Some(p) = state.server.get_player_mut(&player::steamid_64_to_32(&steamid).unwrap_or_default()) {
                 p.account_info = info;
                 p.profile_image = img;
             }

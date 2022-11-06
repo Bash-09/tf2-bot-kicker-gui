@@ -1,18 +1,17 @@
 use std::error::Error;
 
 use clipboard::{ClipboardContext, ClipboardProvider};
-use egui::{Color32, Id, Label, RichText, SelectableLabel, Vec2};
+use egui::{Id, Label, RichText, SelectableLabel, Vec2, Ui, ComboBox};
 use glium_app::utils::persistent_window::PersistentWindow;
 
 use crate::{
     player_checker::PlayerRecord,
-    server::player::{PlayerState, PlayerType},
+    server::player::{PlayerType, UserAction, Player},
     state::State,
 };
 
-use super::{format_time, player_type_combobox, truncate, TRUNC_LEN};
-
-pub fn view_players_window() -> PersistentWindow<State> {
+/// Window that shows all steam accounts currently saved in the playerlist.json file
+pub fn saved_players_window() -> PersistentWindow<State> {
     enum Action {
         Delete(String),
         Edit(String),
@@ -146,7 +145,7 @@ pub fn view_players_window() -> PersistentWindow<State> {
 
         if let Some(Action::Delete(steamid)) = action {
             state.player_checker.players.remove(&steamid);
-            state.server.players.remove(&steamid);
+            state.server.remove_player(&steamid);
         } else if let Some(Action::Edit(steamid)) = action {
             windows.push(edit_player_window(
                 state.player_checker.players.get(&steamid).unwrap().clone(),
@@ -157,6 +156,7 @@ pub fn view_players_window() -> PersistentWindow<State> {
     }))
 }
 
+/// Edit a player record
 pub fn edit_player_window(mut record: PlayerRecord) -> PersistentWindow<State> {
     PersistentWindow::new(Box::new(move |id, _, gui_ctx, state| {
         let mut open = true;
@@ -185,20 +185,7 @@ pub fn edit_player_window(mut record: PlayerRecord) -> PersistentWindow<State> {
                     state.player_checker.update_player_record(record.clone());
 
                     // Update current server record
-                    if let Some(p) = state.server.players.get_mut(&record.steamid) {
-                        p.player_type = record.player_type;
-                        p.notes = record.notes.clone();
-                    }
-
-                    // Update previous players record
-                    for p in state.server.previous_players.inner_mut() {
-                        if p.steamid32 != record.steamid {
-                            continue;
-                        }
-
-                        p.player_type = record.player_type;
-                        p.notes = record.notes.clone();
-                    }
+                    state.server.update_player_from_record(record.clone());
                 }
             });
 
@@ -206,6 +193,7 @@ pub fn edit_player_window(mut record: PlayerRecord) -> PersistentWindow<State> {
     }))
 }
 
+/// Show a list of players that were recently connected to the server
 pub fn recent_players_window() -> PersistentWindow<State> {
     PersistentWindow::new(Box::new(move |id, windows, gui_ctx, state| {
         let mut open = true;
@@ -218,86 +206,103 @@ pub fn recent_players_window() -> PersistentWindow<State> {
                 egui::ScrollArea::vertical().show_rows(
                     ui,
                     ui.text_style_height(&egui::TextStyle::Body),
-                    state.server.previous_players.inner().len(),
+                    state.server.get_previous_players().inner().len(),
                     |ui, range| {
                         let width = 500.0;
                         ui.set_width(width);
 
                         // Render players
+                        let mut action: Option<(UserAction, &Player)> = None;
                         for i in range {
-                            let player = &state.server.previous_players.inner()
-                                [state.server.previous_players.inner().len() - i - 1];
+                            let player = &state.server.get_previous_players().inner()
+                                [state.server.get_previous_players().inner().len() - i - 1];
 
                             ui.horizontal(|ui| {
                                 ui.set_width(width);
 
-                                let text;
-                                if player.steamid32 == state.settings.user {
-                                    text = egui::RichText::new(truncate(&player.name, TRUNC_LEN))
-                                        .color(Color32::GREEN);
-                                } else if player.player_type == PlayerType::Bot
-                                    || player.player_type == PlayerType::Cheater
-                                {
-                                    text = egui::RichText::new(truncate(&player.name, TRUNC_LEN))
-                                        .color(player.player_type.color(ui));
-                                } else if player.stolen_name {
-                                    text = egui::RichText::new(truncate(&player.name, TRUNC_LEN))
-                                        .color(Color32::YELLOW);
-                                } else {
-                                    text = egui::RichText::new(truncate(&player.name, TRUNC_LEN));
+                                if let Some(returned_action) = player.render_player(ui, &state.settings.user, false, !state.settings.steamapi_key.is_empty()) {
+                                    action = Some((returned_action, player));
                                 }
-
-                                let header = ui.selectable_label(false, text);
-
-                                if header.clicked() {
-                                    windows.push(edit_player_window(player.get_record()));
-                                }
-
-                                // Notes / Stolen name warning
-                                if player.stolen_name || !player.notes.is_empty() {
-                                    header.on_hover_ui(|ui| {
-                                        if player.stolen_name {
-                                            ui.label(
-                                            RichText::new(
-                                                "A player with this name is already on the server.",
-                                            )
-                                            .color(Color32::YELLOW),
-                                        );
-                                        }
-                                        if !player.notes.is_empty() {
-                                            ui.label(&player.notes);
-                                        }
-                                    });
-                                }
-
-                                // Cheater, Bot and Joining labels
-                                ui.with_layout(egui::Layout::right_to_left(), |ui| {
-                                    ui.horizontal(|ui| {
-                                        ui.add_space(15.0);
-
-                                        // Time
-                                        ui.label(&format_time(player.time));
-
-                                        if !player.notes.is_empty() {
-                                            ui.label("☑");
-                                        }
-
-                                        // Cheater / Bot / Joining
-                                        if player.player_type != PlayerType::Player {
-                                            ui.add(Label::new(player.player_type.rich_text()));
-                                        }
-                                        if player.state == PlayerState::Spawning {
-                                            ui.add(Label::new(
-                                                RichText::new("Joining").color(Color32::YELLOW),
-                                            ));
-                                        }
-                                    });
-                                });
                             });
+                        }
+
+                        // Do whatever action the user requested from the UI
+                        if let Some((action, _)) = action {
+                            match action {
+                                UserAction::Update(record) => {
+                                    state.server.update_player_from_record(record.clone());
+                                    state.player_checker.update_player_record(record);
+                                },
+                                UserAction::Kick(_) => { log::error!("Was able to kick from the recent players window??"); },
+                                UserAction::GetProfile(steamid32) => {
+                                    state.steamapi_request_sender.send(steamid32).ok();
+                                },
+                                UserAction::OpenWindow(window) => {
+                                    windows.push(window);
+                                },
+                            }
                         }
                     },
                 );
             });
         open
+    }))
+}
+
+/// Creates a dropdown combobox to select a player type, returns true if the value was changed
+pub fn player_type_combobox(id: &str, player_type: &mut PlayerType, ui: &mut Ui) -> bool {
+    let mut changed = false;
+    ComboBox::from_id_source(id)
+        .selected_text(player_type.rich_text())
+        .show_ui(ui, |ui| {
+            changed |= ui
+                .selectable_value(
+                    player_type,
+                    PlayerType::Player,
+                    PlayerType::Player.rich_text(),
+                )
+                .clicked();
+            changed |= ui
+                .selectable_value(player_type, PlayerType::Bot, PlayerType::Bot.rich_text())
+                .clicked();
+            changed |= ui
+                .selectable_value(
+                    player_type,
+                    PlayerType::Cheater,
+                    PlayerType::Cheater.rich_text(),
+                )
+                .clicked();
+            changed |= ui
+                .selectable_value(
+                    player_type,
+                    PlayerType::Suspicious,
+                    PlayerType::Suspicious.rich_text(),
+                )
+                .clicked();
+        });
+    changed
+}
+
+/// Creates a dialog window where the user can edit and save the notes for a specific account
+pub fn create_edit_notes_window(mut record: PlayerRecord) -> PersistentWindow<State> {
+    PersistentWindow::new(Box::new(move |id, _, gui_ctx, state| {
+        let mut open = true;
+        let mut saved = false;
+        egui::Window::new(format!("Edit notes for {}", &record.steamid))
+            .id(Id::new(id))
+            .open(&mut open)
+            .show(gui_ctx, |ui| {
+                ui.vertical_centered(|ui| {
+                    ui.text_edit_multiline(&mut record.notes);
+                    ui.horizontal(|ui| {
+                        if ui.button("Save").clicked() {
+                            saved = true;
+                            state.server.update_player_from_record(record.clone());
+                            state.player_checker.update_player_record(record.clone());
+                        }
+                    });
+                });
+            });
+        open & !saved
     }))
 }

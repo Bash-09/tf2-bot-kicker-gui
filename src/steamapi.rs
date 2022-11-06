@@ -134,7 +134,7 @@ pub fn create_set_api_key_window(mut key: String) -> PersistentWindow<State> {
                     state.settings.steamapi_key = key.clone();
                     (state.steamapi_request_sender, state.steamapi_request_receiver) = create_api_thread(key.clone());
 
-                    for p in state.server.players.values() {
+                    for p in state.server.get_players().values() {
                         state.steamapi_request_sender.send(p.steamid64.clone()).ok();
                     }
                 }

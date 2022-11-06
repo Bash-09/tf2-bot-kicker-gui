@@ -1,5 +1,28 @@
+use std::fmt::Display;
+
 use rcon::{Connection, Error};
 use tokio::{net::TcpStream, runtime::Runtime};
+
+#[derive(Debug)]
+pub enum KickReason {
+    None,
+    Idle,
+    Cheating,
+    Scamming,
+}
+
+impl Display for KickReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(
+            match self {
+                KickReason:: None => "other",
+                KickReason::Idle => "idle",
+                KickReason::Cheating => "cheating",
+                KickReason::Scamming => "scamming",
+            }
+        )
+    }
+}
 
 pub struct CommandManager {
     runtime: Runtime,
@@ -65,8 +88,8 @@ impl CommandManager {
         out
     }
 
-    pub fn kick_player(&mut self, player_userid: &str) -> Option<String> {
-        let command = format!("callvote kick \"{}\"", player_userid);
+    pub fn kick_player(&mut self, player_userid: &str, reason: KickReason) -> Option<String> {
+        let command = format!("callvote kick \"{}\" \"{}\"", player_userid, reason);
         self.run_command(&command)
     }
 

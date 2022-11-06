@@ -6,7 +6,7 @@ use regex::Regex;
 use crate::{
     command_manager::{self, CommandManager},
     logwatcher::LogWatcher,
-    player_checker::{PlayerChecker, PLAYER_LIST, REGEX_LIST},
+    player_checker::{PlayerChecker, PLAYER_LIST, REGEX_LIST, PlayerRecord},
     regexes::{fn_lobby, fn_status, LogMatcher, REGEX_LOBBY, REGEX_STATUS},
     server::{Server, player::Team},
     settings::Settings,
@@ -90,8 +90,8 @@ impl State {
 
         let mut server = Server::new();
 
+        // Add demo players to server
         if demo_mode {
-            // Add demo players to server
             server.add_demo_player("Bash09".to_string(), "U:1:103663727".to_string(), Team::Invaders);
             server.add_demo_player("Baan".to_string(), "U:1:130631917".to_string(), Team::Defenders);
             server.add_demo_player("Random bot".to_string(), "U:1:1314494843".to_string(), Team::Defenders);
@@ -99,9 +99,17 @@ impl State {
             server.add_demo_player("Some cunt".to_string(), "U:1:95849406".to_string(), Team::Invaders);
             server.add_demo_player("ASS".to_string(), "U:1:1203248403".to_string(), Team::Defenders);
 
-            for p in server.players.values_mut() {
+            let mut records: Vec<PlayerRecord> = Vec::new();
+
+            for p in server.get_players().values() {
                 steamapi_request_sender.send(p.steamid64.clone()).ok();
-                player_checker.check_player_steamid(p);
+                if let Some(record) = player_checker.check_player_steamid(&p.steamid32) {
+                    records.push(record);
+                }
+            }
+
+            for r in records {
+                server.update_player_from_record(r);
             }
         }
 

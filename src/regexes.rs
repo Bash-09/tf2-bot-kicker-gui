@@ -78,7 +78,7 @@ pub fn fn_status(
 
     // Check for name stealing
     let mut stolen_name = false;
-    for (k, p) in &server.players {
+    for (k, p) in server.get_players() {
         if steamid32 == p.steamid32 || time > p.time {
             continue;
         }
@@ -86,7 +86,7 @@ pub fn fn_status(
     }
 
     // Update an existing player
-    if let Some(p) = server.players.get_mut(&steamid32) {
+    if let Some(p) = server.get_player_mut(&steamid32) {
         p.userid = caps[1].to_string();
         p.time = time;
         p.state = player_state;
@@ -95,8 +95,6 @@ pub fn fn_status(
 
         if p.name != name {
             log::debug!("Different name! {}, {}", &p.name, &name);
-
-            player_checker.check_player_name(p);
             p.name = name;
 
             // Handle name stealing
@@ -139,10 +137,19 @@ pub fn fn_status(
 
         server.pending_lookup.push(p.steamid64.clone());
 
-        if player_checker.check_player_steamid(&mut p) {
+        if let Some(record) = player_checker.check_player_steamid(&p.steamid32) {
+            server.update_player_from_record(record);
             log::info!("Known {:?} joining: {}", p.player_type, p.name);
         } 
-        if player_checker.check_player_name(&mut p) {
+        if let Some(regx) = player_checker.check_player_name(&p.steamid32) {
+            let mut record = p.get_record();
+            record.player_type = PlayerType::Bot;
+            if record.notes.is_empty() {
+                record.notes = format!("Matched regex {}", regx.as_str());
+            }
+
+            player_checker.update_player_record(record.clone());
+            server.update_player_from_record(record);
             log::info!("Unknown {:?} joining: {}", p.player_type, p.name);
         }
 
@@ -165,7 +172,7 @@ pub fn fn_status(
             server.new_connections.push(p.steamid32.clone());
         }
 
-        server.players.insert(p.steamid32.clone(), p);
+        server.add_player(p);
     }
 }
 
@@ -212,7 +219,7 @@ pub fn fn_lobby(
         _ => {}
     }
 
-    match serv.players.get_mut(&caps[2].to_string()) {
+    match serv.get_player_mut(&caps[2].to_string()) {
         None => {}
         Some(p) => {
             p.team = team;
