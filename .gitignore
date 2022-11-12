@@ -2,3 +2,5 @@
 /dependencies.txt
 /cfg/settings.json
 /glium_app/target
+/perf*
+/flamegraph.svg
