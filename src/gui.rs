@@ -13,8 +13,12 @@ use crate::{
     version::{self, VersionResponse},
 };
 
-use self::{player_windows::saved_players_window, regex_windows::view_regexes_window};
+use self::{
+    chat_window::view_chat_window, player_windows::saved_players_window,
+    regex_windows::view_regexes_window,
+};
 
+pub mod chat_window;
 pub mod player_windows;
 pub mod regex_windows;
 
@@ -109,6 +113,10 @@ pub fn render(
 
             if ui.button("Recent players").clicked() {
                 windows.push(player_windows::recent_players_window());
+            }
+
+            if ui.button("Chat settings").clicked() {
+                windows.push(view_chat_window());
             }
 
             if ui.button("Check for updates").clicked() && state.latest_version.is_none() {

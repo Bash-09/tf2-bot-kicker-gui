@@ -227,35 +227,34 @@ impl Server {
             return;
         }
 
-        // Players joining
         if bots && cheaters {
-            message.push_str("Bots and Cheaters joining ");
+            message.push_str(&format!("{} ", settings.message_both.trim()));
         } else if bots {
-            message.push_str("Bots joining ");
+            message.push_str(&format!("{} ", settings.message_bots.trim()));
         } else if cheaters {
-            message.push_str("Cheaters joining ");
+            message.push_str(&format!("{} ", settings.message_cheaters.trim()));
         }
 
         // Team
         match self.players.get(&settings.user) {
             Some(user) => {
                 if (invaders && defenders) || user.team == Team::None {
-                    message.push_str("both teams: ");
+                    message.push_str(&format!("{} ", settings.message_both_teams.trim()));
                 } else if (invaders && user.team == Team::Invaders)
                     || (defenders && user.team == Team::Defenders)
                 {
-                    message.push_str("our team: ");
+                    message.push_str(&format!("{} ", settings.message_same_team.trim()));
                 } else if (invaders && user.team == Team::Defenders)
                     || (defenders && user.team == Team::Invaders)
                 {
-                    message.push_str("the enemy team: ");
+                    message.push_str(&format!("{} ", settings.message_enemy_team.trim()));
                 } else {
-                    message.push_str("the server: ");
+                    message.push_str(&format!("{} ", settings.message_default.trim()));
                     log::error!("Announcing bot that doesn't have a team.");
                 }
             }
             None => {
-                message.push_str("the server: ");
+                message.push_str(&format!("{} ", settings.message_default.trim()));
             }
         }
 
