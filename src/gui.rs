@@ -9,14 +9,16 @@ use crate::{
     logwatcher::LogWatcher,
     server::player::{Player, PlayerType, Team, UserAction},
     state::State,
-    version::{self, VersionResponse}, steamapi,
+    steamapi,
+    version::{self, VersionResponse},
 };
 
 use self::{
-    player_windows::saved_players_window,
+    chat_window::view_chat_window, player_windows::saved_players_window,
     regex_windows::view_regexes_window,
 };
 
+pub mod chat_window;
 pub mod player_windows;
 pub mod regex_windows;
 
@@ -113,13 +115,19 @@ pub fn render(
                 windows.push(player_windows::recent_players_window());
             }
 
+            if ui.button("Chat settings").clicked() {
+                windows.push(view_chat_window());
+            }
+
             if ui.button("Check for updates").clicked() && state.latest_version.is_none() {
                 state.latest_version = Some(VersionResponse::request_latest_version());
                 state.force_latest_version = true;
             }
 
             if ui.button("Steam API").clicked() {
-                windows.push(steamapi::create_set_api_key_window(state.settings.steamapi_key.clone()));
+                windows.push(steamapi::create_set_api_key_window(
+                    state.settings.steamapi_key.clone(),
+                ));
             }
         });
     });
@@ -377,7 +385,12 @@ fn render_players(
                 team_ui.horizontal(|ui| {
                     ui.set_width(width);
 
-                    if let Some(returned_action) = player.render_player(ui, &state.settings.user, true, !state.settings.steamapi_key.is_empty()) {
+                    if let Some(returned_action) = player.render_player(
+                        ui,
+                        &state.settings.user,
+                        true,
+                        !state.settings.steamapi_key.is_empty(),
+                    ) {
                         action = Some((returned_action, player));
                     }
                 });
@@ -389,23 +402,21 @@ fn render_players(
                     UserAction::Update(record) => {
                         state.server.update_player_from_record(record.clone());
                         state.player_checker.update_player_record(record);
-                    },
+                    }
                     UserAction::Kick(reason) => {
                         cmd.kick_player(&player.userid, reason);
-                    },
+                    }
                     UserAction::GetProfile(steamid32) => {
                         state.steamapi_request_sender.send(steamid32).ok();
-                    },
+                    }
                     UserAction::OpenWindow(window) => {
                         windows.push(window);
-                    },
+                    }
                 }
             }
-
         });
     });
 }
-
 
 fn create_dialog_box(title: String, text: String) -> PersistentWindow<State> {
     PersistentWindow::new(Box::new(move |id, _, ctx, _| {
@@ -423,4 +434,3 @@ fn create_dialog_box(title: String, text: String) -> PersistentWindow<State> {
         open
     }))
 }
-
