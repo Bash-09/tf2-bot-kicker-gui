@@ -1,14 +1,24 @@
 use core::fmt;
 
-
-use chrono::{Utc, NaiveDateTime};
+use chrono::{NaiveDateTime, Utc};
 use clipboard::{ClipboardContext, ClipboardProvider};
-use egui::{Color32, RichText, Ui, Vec2, Label};
+use egui::{Color32, Label, RichText, Ui, Vec2};
 use egui_extras::RetainedImage;
 use glium_app::utils::persistent_window::PersistentWindow;
 use serde::Serialize;
 
-use crate::{player_checker::PlayerRecord, steamapi::AccountInfo, command_manager::KickReason, gui::{truncate, TRUNC_LEN, player_windows::{player_type_combobox, create_edit_notes_window}, regex_windows::new_regex_window, format_time}, state::State};
+use crate::{
+    command_manager::KickReason,
+    gui::{
+        format_time,
+        player_windows::{create_edit_notes_window, player_type_combobox},
+        regex_windows::new_regex_window,
+        truncate, TRUNC_LEN,
+    },
+    player_checker::PlayerRecord,
+    state::State,
+    steamapi::AccountInfo,
+};
 
 pub type Steamid64 = String;
 pub type Steamid32 = String;
@@ -34,7 +44,7 @@ pub enum PlayerState {
     Active,
 }
 
-/// An action on a player initiated by the user through the UI 
+/// An action on a player initiated by the user through the UI
 pub enum UserAction {
     Update(PlayerRecord),
     Kick(KickReason),
@@ -98,7 +108,13 @@ impl Player {
     /// `allow_kick` enables a button in the context menu to call a votekick on the player
     /// `allow_steamapi` enables a button to request the user's steam account info and displays
     /// that info when hovering the player's name
-    pub fn render_player(&self, ui: &mut Ui, user: &str, allow_kick: bool, allow_steamapi: bool) -> Option<UserAction> {
+    pub fn render_player(
+        &self,
+        ui: &mut Ui,
+        user: &str,
+        allow_kick: bool,
+        allow_steamapi: bool,
+    ) -> Option<UserAction> {
         static mut CONTEXT_MENU_OPEN: Option<String> = None;
 
         let mut ui_action: Option<UserAction> = None;
@@ -113,23 +129,17 @@ impl Player {
 
         // Player name
         let text = if self.steamid32 == user {
-            egui::RichText::new(truncate(&self.name, TRUNC_LEN))
-                .color(Color32::GREEN)
-        } else if self.player_type == PlayerType::Bot
-            || self.player_type == PlayerType::Cheater
-        {
-            egui::RichText::new(truncate(&self.name, TRUNC_LEN))
-                .color(self.player_type.color(ui))
+            egui::RichText::new(truncate(&self.name, TRUNC_LEN)).color(Color32::GREEN)
+        } else if self.player_type == PlayerType::Bot || self.player_type == PlayerType::Cheater {
+            egui::RichText::new(truncate(&self.name, TRUNC_LEN)).color(self.player_type.color(ui))
         } else if self.stolen_name {
-            egui::RichText::new(truncate(&self.name, TRUNC_LEN))
-                .color(Color32::YELLOW)
+            egui::RichText::new(truncate(&self.name, TRUNC_LEN)).color(Color32::YELLOW)
         } else {
             egui::RichText::new(truncate(&self.name, TRUNC_LEN))
         };
 
         // Player name button styling
-        ui.style_mut().visuals.widgets.inactive.bg_fill =
-            ui.style().visuals.window_fill();
+        ui.style_mut().visuals.widgets.inactive.bg_fill = ui.style().visuals.window_fill();
 
         // Player actions context menu
         let mut menu_open = false;
@@ -147,7 +157,7 @@ impl Player {
                 match &CONTEXT_MENU_OPEN {
                     None => {
                         CONTEXT_MENU_OPEN = Some(self.steamid32.clone());
-                    },
+                    }
                     Some(id) => {
                         if id != &self.steamid32 {
                             CONTEXT_MENU_OPEN = None;
@@ -168,9 +178,7 @@ impl Player {
             if ui.button("Copy SteamID64").clicked() {
                 let ctx: Result<ClipboardContext, Box<dyn std::error::Error>> =
                     ClipboardProvider::new();
-                ctx.unwrap()
-                    .set_contents(self.steamid64.clone())
-                    .unwrap();
+                ctx.unwrap().set_contents(self.steamid64.clone()).unwrap();
                 log::info!("{}", format!("Copied \"{}\"", self.steamid64));
             }
 
@@ -183,7 +191,9 @@ impl Player {
 
             // Copy SteamID and Name buttons
             if ui.button("Edit Notes").clicked() {
-                ui_action = Some(UserAction::OpenWindow(create_edit_notes_window(self.get_record())));
+                ui_action = Some(UserAction::OpenWindow(create_edit_notes_window(
+                    self.get_record(),
+                )));
             }
 
             if allow_steamapi {
@@ -198,43 +208,48 @@ impl Player {
             }
 
             // Other actions button
-            if allow_kick || self.player_type == PlayerType::Bot || self.player_type == PlayerType::Cheater {
-                ui.menu_button(RichText::new("Other actions").color(Color32::RED), |ui| {
-
-                    // Call votekick button
-                    if allow_kick {
-                        ui.menu_button(RichText::new("Call votekick").color(Color32::RED), |ui| {
-                            let mut reason: Option<KickReason> = None;
-                            if ui.button("No reason").clicked() { reason = Some(KickReason::None); }
-                            if ui.button("Idle").clicked() { reason = Some(KickReason::Idle); }
-                            if ui.button("Cheating").clicked() { reason = Some(KickReason::Cheating); }
-                            if ui.button("Scamming").clicked() { reason = Some(KickReason::Scamming); }
-
-                            if let Some(reason) = reason {
-                                ui_action = Some(UserAction::Kick(reason));
-                            }
-                        }); 
-                    }
-
-                    // Save Name button
-                    if self.player_type == PlayerType::Bot
-                        || self.player_type == PlayerType::Cheater
-                    {
-                        let but = ui.button(RichText::new("Save Name").color(Color32::RED));
-                        if but.clicked() {
-                            ui_action = Some(UserAction::OpenWindow(new_regex_window(self.get_export_regex())));
+            if allow_kick
+                || self.player_type == PlayerType::Bot
+                || self.player_type == PlayerType::Cheater
+            {
+                // Call votekick button
+                if allow_kick {
+                    ui.menu_button(RichText::new("Call votekick").color(Color32::RED), |ui| {
+                        let mut reason: Option<KickReason> = None;
+                        if ui.button("No reason").clicked() {
+                            reason = Some(KickReason::None);
                         }
-                        but.on_hover_text(
-                            RichText::new(
-                                "Players with this name will always be recognized as a bot",
-                            )
-                            .color(Color32::RED),
-                        );
+                        if ui.button("Idle").clicked() {
+                            reason = Some(KickReason::Idle);
+                        }
+                        if ui.button("Cheating").clicked() {
+                            reason = Some(KickReason::Cheating);
+                        }
+                        if ui.button("Scamming").clicked() {
+                            reason = Some(KickReason::Scamming);
+                        }
+
+                        if let Some(reason) = reason {
+                            ui_action = Some(UserAction::Kick(reason));
+                        }
+                    });
+                }
+
+                // Save Name button
+                if self.player_type == PlayerType::Bot || self.player_type == PlayerType::Cheater {
+                    let but = ui.button(RichText::new("Save Name").color(Color32::RED));
+                    if but.clicked() {
+                        ui_action = Some(UserAction::OpenWindow(new_regex_window(
+                            self.get_export_regex(),
+                        )));
                     }
-                });
+                    but.on_hover_text(
+                        RichText::new("Players with this name will always be recognized as a bot")
+                            .color(Color32::RED),
+                    );
+                }
             }
         });
-
 
         // Close context menu
         if header.response.clicked_elsewhere() {
@@ -293,8 +308,12 @@ impl Player {
         if let Some(info_request) = &self.account_info {
             match info_request {
                 Ok(info) => {
-                    let AccountInfo {summary, bans, friends: _} = info;
-                    
+                    let AccountInfo {
+                        summary,
+                        bans,
+                        friends: _,
+                    } = info;
+
                     ui.horizontal(|ui| {
                         if let Some(profile_img) = &self.profile_image {
                             profile_img.show_size(ui, Vec2::new(64.0, 64.0));
@@ -313,31 +332,54 @@ impl Player {
                             });
 
                             if let Some(time) = summary.timecreated {
-                                let age = Utc::now().naive_local().signed_duration_since(NaiveDateTime::from_timestamp(time as i64, 0));
+                                let age = Utc::now().naive_local().signed_duration_since(
+                                    NaiveDateTime::from_timestamp(time as i64, 0),
+                                );
                                 let years = age.num_days() / 365;
                                 let days = age.num_days() - years * 365;
 
                                 if years > 0 {
-                                    ui.label(&format!("Account Age: {} years, {} days", years, days));
+                                    ui.label(&format!(
+                                        "Account Age: {} years, {} days",
+                                        years, days
+                                    ));
                                 } else {
                                     ui.label(&format!("Account Age: {} days", days));
                                 }
                             }
 
                             if bans.VACBanned {
-                                ui.label(RichText::new(&format!("This player has VAC bans: {}", bans.NumberOfVACBans)).color(Color32::RED));
+                                ui.label(
+                                    RichText::new(&format!(
+                                        "This player has VAC bans: {}",
+                                        bans.NumberOfVACBans
+                                    ))
+                                    .color(Color32::RED),
+                                );
                             }
 
                             if bans.NumberOfGameBans > 0 {
-                                ui.label(RichText::new(&format!("This player has Game bans: {}", bans.NumberOfGameBans)).color(Color32::RED));
+                                ui.label(
+                                    RichText::new(&format!(
+                                        "This player has Game bans: {}",
+                                        bans.NumberOfGameBans
+                                    ))
+                                    .color(Color32::RED),
+                                );
                             }
 
                             if bans.VACBanned || bans.NumberOfGameBans > 0 {
-                                ui.label(RichText::new(&format!("Days since last ban: {}", bans.DaysSinceLastBan)).color(Color32::RED));
+                                ui.label(
+                                    RichText::new(&format!(
+                                        "Days since last ban: {}",
+                                        bans.DaysSinceLastBan
+                                    ))
+                                    .color(Color32::RED),
+                                );
                             }
                         });
                     });
-                },
+                }
                 Err(e) => {
                     let string = format!("{}", e);
                     ui.label(&format!("Could not fetch steam profile: {}", e));
@@ -355,10 +397,8 @@ impl Player {
         if self.stolen_name || !self.notes.is_empty() {
             if self.stolen_name {
                 ui.label(
-                    RichText::new(
-                        "A player with this name is already on the server.",
-                    )
-                    .color(Color32::YELLOW),
+                    RichText::new("A player with this name is already on the server.")
+                        .color(Color32::YELLOW),
                 );
             }
             if !self.notes.is_empty() {
