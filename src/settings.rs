@@ -46,6 +46,9 @@ pub struct Settings {
 
     pub ignore_version: String,
     pub ignore_no_api_key: bool,
+
+    pub launch_tf2: bool,
+    pub close_on_disconnect: bool,
 }
 
 impl Settings {
@@ -90,6 +93,9 @@ impl Settings {
             mark_name_stealers: true,
             ignore_version: String::new(),
             ignore_no_api_key: false,
+
+            launch_tf2: false,
+            close_on_disconnect: false,
         }
     }
 
@@ -193,6 +199,11 @@ impl Settings {
         set.ignore_no_api_key = json["ignore_no_api_key"]
             .as_bool()
             .unwrap_or(set.ignore_no_api_key);
+
+        set.launch_tf2 = json["launch_tf2"].as_bool().unwrap_or(set.launch_tf2);
+        set.close_on_disconnect = json["close_on_disconnect"]
+            .as_bool()
+            .unwrap_or(set.close_on_disconnect);
 
         Ok(set)
     }

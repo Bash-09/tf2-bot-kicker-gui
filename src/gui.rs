@@ -172,6 +172,8 @@ pub fn render(
             });
 
             ui.checkbox(&mut state.settings.paused, "Pause actions").on_hover_text("Prevents the program from calling any votekicks or sending chat messages.");
+            ui.checkbox(&mut state.settings.launch_tf2, "Launch TF2").on_hover_text("Launch TF2 when this program is started.");
+            ui.checkbox(&mut state.settings.close_on_disconnect, "Close with TF2").on_hover_text("Close this program automatically when it disconnects from TF2.");
 
             ui.add(Separator::default().spacing(20.0));
             ui.heading("Kicking");
@@ -217,12 +219,6 @@ pub fn render(
 
     // Main window with info and players
     egui::CentralPanel::default().show(gui_ctx, |ui| {
-
-        if state.is_demo() {
-            render_players(ui, state, windows, cmd);
-            return;
-        }
-
         if state.log.is_none() {
             ui.label("No valid TF2 directory set. (It should be the one inside \"common\")\n\n");
             ui.label("Instructions:");
@@ -258,7 +254,7 @@ pub fn render(
 
 
         } else {
-            match cmd.connected(&state.settings.rcon_password) {
+            match state.is_connected() {
                 // Connected and good
                 Ok(_) => {
                     if state.server.get_players().is_empty() {

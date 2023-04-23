@@ -48,6 +48,20 @@ impl LogMatcher {
 
 */
 
+/// Player killed someone
+/// Matches:
+///    0: Killer
+///    1: Victim
+///    2: Weapon
+///    3: Crit?
+pub const REGEX_KILL: &str = r#"^(.*)\skilled\s(.*)\swith\s(.*)\.(\s\(crit\))?$"#;
+
+/// Chat message
+/// Matches:
+///    0: Player
+///    1: Message
+pub const REGEX_CHAT: &str = r#"^(?:\*DEAD\*\s)?(.*)\s:\s\s(.*)$"#;
+
 // Reads lines from output of the "status" command
 // Includes players on server, player name, state, steamid, time connected
 // If no player exists on the server with a steamid from here, it creates a new player and adds it to the list

@@ -6,12 +6,13 @@ use regex::Regex;
 use crate::{
     command_manager::{self, CommandManager},
     logwatcher::LogWatcher,
-    player_checker::{PlayerChecker, PLAYER_LIST, REGEX_LIST, PlayerRecord},
+    player_checker::{PlayerChecker, PlayerRecord, PLAYER_LIST, REGEX_LIST},
     regexes::{fn_lobby, fn_status, LogMatcher, REGEX_LOBBY, REGEX_STATUS},
-    server::{Server, player::Team},
+    server::{player::Team, Server},
     settings::Settings,
+    steamapi::{self, AccountInfoReceiver},
     timer::Timer,
-    version::VersionResponse, steamapi::{AccountInfoReceiver, self},
+    version::VersionResponse,
 };
 
 pub struct State {
@@ -35,7 +36,8 @@ pub struct State {
     pub steamapi_request_sender: Sender<String>,
     pub steamapi_request_receiver: AccountInfoReceiver,
 
-    demo_mode: bool,
+    has_connected: bool,
+    is_connected: Result<(), rcon::Error>,
 
     pub ui_context_menu_open: Option<usize>,
 }
@@ -86,18 +88,43 @@ impl State {
 
         let log = LogWatcher::use_directory(&settings.tf2_directory);
 
-        let (steamapi_request_sender, steamapi_request_receiver) = steamapi::create_api_thread(settings.steamapi_key.clone());
+        let (steamapi_request_sender, steamapi_request_receiver) =
+            steamapi::create_api_thread(settings.steamapi_key.clone());
 
         let mut server = Server::new();
 
         // Add demo players to server
         if demo_mode {
-            server.add_demo_player("Bash09".to_string(), "U:1:103663727".to_string(), Team::Invaders);
-            server.add_demo_player("Baan".to_string(), "U:1:130631917".to_string(), Team::Defenders);
-            server.add_demo_player("Random bot".to_string(), "U:1:1314494843".to_string(), Team::Defenders);
-            server.add_demo_player("SmooveB".to_string(), "U:1:16722748".to_string(), Team::Invaders);
-            server.add_demo_player("Some cunt".to_string(), "U:1:95849406".to_string(), Team::Invaders);
-            server.add_demo_player("ASS".to_string(), "U:1:1203248403".to_string(), Team::Defenders);
+            server.add_demo_player(
+                "Bash09".to_string(),
+                "U:1:103663727".to_string(),
+                Team::Invaders,
+            );
+            server.add_demo_player(
+                "Baan".to_string(),
+                "U:1:130631917".to_string(),
+                Team::Defenders,
+            );
+            server.add_demo_player(
+                "Random bot".to_string(),
+                "U:1:1314494843".to_string(),
+                Team::Defenders,
+            );
+            server.add_demo_player(
+                "SmooveB".to_string(),
+                "U:1:16722748".to_string(),
+                Team::Invaders,
+            );
+            server.add_demo_player(
+                "Some cunt".to_string(),
+                "U:1:95849406".to_string(),
+                Team::Invaders,
+            );
+            server.add_demo_player(
+                "ASS".to_string(),
+                "U:1:1203248403".to_string(),
+                Team::Defenders,
+            );
 
             let mut records: Vec<PlayerRecord> = Vec::new();
 
@@ -132,25 +159,29 @@ impl State {
             steamapi_request_sender,
             steamapi_request_receiver,
 
-            demo_mode,
+            has_connected: false,
+            is_connected: Ok(()),
 
             ui_context_menu_open: None,
         }
     }
 
-    pub fn is_demo(&self) -> bool {
-        self.demo_mode
+    pub fn has_connected(&self) -> bool {
+        self.has_connected
+    }
+
+    pub fn is_connected(&self) -> &Result<(), rcon::Error> {
+        &self.is_connected
     }
 
     /// Begins a refresh on the local server state, any players unaccounted for since the last time this function was called will be removed.
     pub fn refresh(&mut self, cmd: &mut CommandManager) {
-        if self.demo_mode {
+        if let Err(e) = cmd.connected(&self.settings.rcon_password) {
+            self.is_connected = Err(e);
             return;
         }
-
-        if cmd.connected(&self.settings.rcon_password).is_err() {
-            return;
-        }
+        self.is_connected = Ok(());
+        self.has_connected = true;
         self.server.prune();
 
         // Run status and tf_lobby_debug commands

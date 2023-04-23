@@ -120,6 +120,26 @@ impl Application for TF2BotKicker {
             self.windows
                 .push(steamapi::create_set_api_key_window(String::new()));
         }
+
+        // Try to run TF2 if set to
+        if self.state.settings.launch_tf2 {
+            if let Err(e) = std::process::Command::new("steam")
+                .arg("steam://rungameid/440")
+                .output()
+            {
+                self.windows
+                    .push(PersistentWindow::new(Box::new(move |id, _, ctx, _| {
+                        let mut open = true;
+                        egui::Window::new("Failed to launch TF2")
+                            .id(egui::Id::new(id))
+                            .open(&mut open)
+                            .show(ctx, |ui| {
+                                ui.label(&format!("{:?}", e));
+                            });
+                        open
+                    })));
+            }
+        }
     }
 
     fn update(&mut self, _t: &glium_app::Timer, ctx: &mut Context) {
@@ -204,6 +224,16 @@ impl Application for TF2BotKicker {
         // Refresh server
         if state.refresh_timer.update() {
             state.refresh(&mut self.cmd);
+
+            // Close if TF2 has been closed and we want to close now
+            if state.has_connected()
+                && !state.is_connected().is_ok()
+                && state.settings.close_on_disconnect
+            {
+                log::debug!("Lost connection from TF2, closing program.");
+                self.close(ctx);
+                std::process::exit(0);
+            }
 
             let system_time = SystemTime::now();
             let datetime: DateTime<Local> = system_time.into();
