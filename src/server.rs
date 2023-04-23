@@ -42,10 +42,10 @@ impl Server {
         let mut players: HashMap<String, Player> = HashMap::new();
         std::mem::swap(&mut players, &mut self.players);
 
-        for p in players.into_values() {
+        'outer: for p in players.into_values() {
             for prev in self.previous_players.inner() {
                 if p.steamid32 == prev.steamid32 {
-                    break;
+                    continue 'outer;
                 }
             }
             self.previous_players.push(p);
@@ -162,7 +162,7 @@ impl Server {
     /// Remove players who aren't present on the server anymore
     /// (This method will be called automatically in a rexes command)
     pub fn prune(&mut self) {
-        for (_, p) in self.players.drain_filter(|_, v| {
+        'outer: for (_, p) in self.players.drain_filter(|_, v| {
             if !v.accounted && v.player_type == PlayerType::Bot {
                 log::info!("Bot disconnected: {}", v.name);
             }
@@ -175,7 +175,7 @@ impl Server {
             log::info!("Pruning player {}", &p.name);
             for prev in self.previous_players.inner() {
                 if p.steamid32 == prev.steamid32 {
-                    continue;
+                    continue 'outer;
                 }
             }
             self.previous_players.push(p);

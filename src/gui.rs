@@ -338,9 +338,11 @@ fn render_players(
     windows: &mut PersistentWindowManager<State>,
     cmd: &mut CommandManager,
 ) {
-    let width = (ui.available_width() - 5.0) / 2.0;
-
     egui::ScrollArea::vertical().show(ui, |ui| {
+        let mut remaining_players = Vec::new();
+        let mut action: Option<(UserAction, &Player)> = None;
+        let width = (ui.available_width() - 5.0) / 2.0;
+
         ui.columns(2, |cols| {
             // Headings
             cols[0].horizontal(|ui| {
@@ -373,13 +375,14 @@ fn render_players(
             let mut playerlist: Vec<&Player> = state.server.get_players().values().collect();
             playerlist.sort_by(|a, b| b.time.cmp(&a.time));
 
-            let mut action: Option<(UserAction, &Player)> = None;
-
-            for player in playerlist.iter() {
+            for player in playerlist {
                 let team_ui = match player.team {
                     Team::Invaders => &mut cols[0],
                     Team::Defenders => &mut cols[1],
-                    Team::None => continue,
+                    Team::None => {
+                        remaining_players.push(player);
+                        continue;
+                    }
                 };
 
                 team_ui.horizontal(|ui| {
@@ -395,26 +398,43 @@ fn render_players(
                     }
                 });
             }
+        });
 
-            // Do whatever action the user requested from the UI
-            if let Some((action, player)) = action {
-                match action {
-                    UserAction::Update(record) => {
-                        state.server.update_player_from_record(record.clone());
-                        state.player_checker.update_player_record(record);
+        // Render players with no team
+        if !remaining_players.is_empty() {
+            ui.separator();
+            for player in remaining_players {
+                ui.horizontal(|ui| {
+                    if let Some(returned_action) = player.render_player(
+                        ui,
+                        &state.settings.user,
+                        true,
+                        !state.settings.steamapi_key.is_empty(),
+                    ) {
+                        action = Some((returned_action, player));
                     }
-                    UserAction::Kick(reason) => {
-                        cmd.kick_player(&player.userid, reason);
-                    }
-                    UserAction::GetProfile(steamid32) => {
-                        state.steamapi_request_sender.send(steamid32).ok();
-                    }
-                    UserAction::OpenWindow(window) => {
-                        windows.push(window);
-                    }
+                });
+            }
+        }
+
+        // Do whatever action the user requested from the UI
+        if let Some((action, player)) = action {
+            match action {
+                UserAction::Update(record) => {
+                    state.server.update_player_from_record(record.clone());
+                    state.player_checker.update_player_record(record);
+                }
+                UserAction::Kick(reason) => {
+                    cmd.kick_player(&player.userid, reason);
+                }
+                UserAction::GetProfile(steamid32) => {
+                    state.steamapi_request_sender.send(steamid32).ok();
+                }
+                UserAction::OpenWindow(window) => {
+                    windows.push(window);
                 }
             }
-        });
+        }
     });
 }
 
