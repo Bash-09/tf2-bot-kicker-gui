@@ -9,13 +9,11 @@ use crate::{
     logwatcher::LogWatcher,
     server::player::{Player, PlayerType, Team, UserAction},
     state::State,
-    version::{self, VersionResponse}, steamapi,
+    steamapi,
+    version::{self, VersionResponse},
 };
 
-use self::{
-    player_windows::saved_players_window,
-    regex_windows::view_regexes_window,
-};
+use self::{player_windows::saved_players_window, regex_windows::view_regexes_window};
 
 pub mod player_windows;
 pub mod regex_windows;
@@ -119,7 +117,9 @@ pub fn render(
             }
 
             if ui.button("Steam API").clicked() {
-                windows.push(steamapi::create_set_api_key_window(state.settings.steamapi_key.clone()));
+                windows.push(steamapi::create_set_api_key_window(
+                    state.settings.steamapi_key.clone(),
+                ));
             }
         });
     });
@@ -330,9 +330,11 @@ fn render_players(
     windows: &mut PersistentWindowManager<State>,
     cmd: &mut CommandManager,
 ) {
-    let width = (ui.available_width() - 5.0) / 2.0;
-
     egui::ScrollArea::vertical().show(ui, |ui| {
+        let mut remaining_players = Vec::new();
+        let mut action: Option<(UserAction, &Player)> = None;
+        let width = (ui.available_width() - 5.0) / 2.0;
+
         ui.columns(2, |cols| {
             // Headings
             cols[0].horizontal(|ui| {
@@ -365,47 +367,68 @@ fn render_players(
             let mut playerlist: Vec<&Player> = state.server.get_players().values().collect();
             playerlist.sort_by(|a, b| b.time.cmp(&a.time));
 
-            let mut action: Option<(UserAction, &Player)> = None;
-
-            for player in playerlist.iter() {
+            for player in playerlist {
                 let team_ui = match player.team {
                     Team::Invaders => &mut cols[0],
                     Team::Defenders => &mut cols[1],
-                    Team::None => continue,
+                    Team::None => {
+                        remaining_players.push(player);
+                        continue;
+                    }
                 };
 
                 team_ui.horizontal(|ui| {
                     ui.set_width(width);
 
-                    if let Some(returned_action) = player.render_player(ui, &state.settings.user, true, !state.settings.steamapi_key.is_empty()) {
+                    if let Some(returned_action) = player.render_player(
+                        ui,
+                        &state.settings.user,
+                        true,
+                        !state.settings.steamapi_key.is_empty(),
+                    ) {
                         action = Some((returned_action, player));
                     }
                 });
             }
+        });
 
-            // Do whatever action the user requested from the UI
-            if let Some((action, player)) = action {
-                match action {
-                    UserAction::Update(record) => {
-                        state.server.update_player_from_record(record.clone());
-                        state.player_checker.update_player_record(record);
-                    },
-                    UserAction::Kick(reason) => {
-                        cmd.kick_player(&player.userid, reason);
-                    },
-                    UserAction::GetProfile(steamid32) => {
-                        state.steamapi_request_sender.send(steamid32).ok();
-                    },
-                    UserAction::OpenWindow(window) => {
-                        windows.push(window);
-                    },
+        // Render players with no team
+        if !remaining_players.is_empty() {
+            ui.separator();
+            for player in remaining_players {
+                ui.horizontal(|ui| {
+                    if let Some(returned_action) = player.render_player(
+                        ui,
+                        &state.settings.user,
+                        true,
+                        !state.settings.steamapi_key.is_empty(),
+                    ) {
+                        action = Some((returned_action, player));
+                    }
+                });
+            }
+        }
+
+        // Do whatever action the user requested from the UI
+        if let Some((action, player)) = action {
+            match action {
+                UserAction::Update(record) => {
+                    state.server.update_player_from_record(record.clone());
+                    state.player_checker.update_player_record(record);
+                }
+                UserAction::Kick(reason) => {
+                    cmd.kick_player(&player.userid, reason);
+                }
+                UserAction::GetProfile(steamid32) => {
+                    state.steamapi_request_sender.send(steamid32).ok();
+                }
+                UserAction::OpenWindow(window) => {
+                    windows.push(window);
                 }
             }
-
-        });
+        }
     });
 }
-
 
 fn create_dialog_box(title: String, text: String) -> PersistentWindow<State> {
     PersistentWindow::new(Box::new(move |id, _, ctx, _| {
@@ -423,4 +446,3 @@ fn create_dialog_box(title: String, text: String) -> PersistentWindow<State> {
         open
     }))
 }
-

@@ -145,7 +145,7 @@ pub fn fn_status(
             if let Some(regx) = player_checker.check_player_name(&p.name) {
                 p.common_name = true;
             }
-        } 
+        }
         if let Some(regx) = player_checker.check_player_name(&p.name) {
             p.player_type = PlayerType::Bot;
             p.common_name = true;
@@ -172,7 +172,7 @@ pub fn fn_status(
             player_checker.update_player(&p);
         }
 
-        if p.time <= (settings.refresh_period * 1.5).ceil() as u32{
+        if p.time <= (settings.refresh_period * 1.5).ceil() as u32 {
             server.new_connections.push(p.steamid32.clone());
         }
 
