@@ -1,5 +1,4 @@
 #![feature(hash_drain_filter)]
-#![feature(scoped_threads)]
 
 extern crate chrono;
 extern crate env_logger;
@@ -15,9 +14,9 @@ pub mod ringbuffer;
 pub mod server;
 pub mod settings;
 pub mod state;
+pub mod steamapi;
 pub mod timer;
 pub mod version;
-pub mod steamapi;
 
 use chrono::{DateTime, Local};
 use command_manager::CommandManager;
@@ -118,7 +117,8 @@ impl Application for TF2BotKicker {
 
         self.state.latest_version = Some(VersionResponse::request_latest_version());
         if !self.state.settings.ignore_no_api_key && self.state.settings.steamapi_key.is_empty() {
-            self.windows.push(steamapi::create_set_api_key_window(String::new()));
+            self.windows
+                .push(steamapi::create_set_api_key_window(String::new()));
         }
     }
 
@@ -183,7 +183,10 @@ impl Application for TF2BotKicker {
 
         // Handle finished steamid requests
         while let Ok((info, img, steamid)) = state.steamapi_request_receiver.try_recv() {
-            if let Some(p) = state.server.get_player_mut(&player::steamid_64_to_32(&steamid).unwrap_or_default()) {
+            if let Some(p) = state
+                .server
+                .get_player_mut(&player::steamid_64_to_32(&steamid).unwrap_or_default())
+            {
                 p.account_info = info;
                 p.profile_image = img;
             }

@@ -21,6 +21,15 @@ pub struct Settings {
     pub announce_namesteal: bool,
     pub dont_announce_common_names: bool,
 
+    pub message_bots: String,
+    pub message_cheaters: String,
+    pub message_both: String,
+
+    pub message_same_team: String,
+    pub message_enemy_team: String,
+    pub message_both_teams: String,
+    pub message_default: String,
+
     pub kick_bots: bool,
     pub kick_cheaters: bool,
 
@@ -56,6 +65,15 @@ impl Settings {
             announce_cheaters: false,
             announce_namesteal: true,
             dont_announce_common_names: true,
+
+            message_bots: String::from("Bots joining"),
+            message_cheaters: String::from("Cheaters joining"),
+            message_both: String::from("Bots and Cheaters joining"),
+
+            message_same_team: String::from("our team:"),
+            message_enemy_team: String::from("the enemy team:"),
+            message_both_teams: String::from("both teams:"),
+            message_default: String::from("the server:"),
 
             kick_bots: true,
             kick_cheaters: false,
@@ -98,7 +116,10 @@ impl Settings {
         }
 
         set.user = json["user"].as_str().unwrap_or(&set.user).to_string();
-        set.steamapi_key = json["steamapi_key"].as_str().unwrap_or(&set.steamapi_key).to_string();
+        set.steamapi_key = json["steamapi_key"]
+            .as_str()
+            .unwrap_or(&set.steamapi_key)
+            .to_string();
 
         set.announce_bots = json["announce_bots"].as_bool().unwrap_or(set.announce_bots);
         set.announce_cheaters = json["announce_cheaters"]
@@ -110,6 +131,36 @@ impl Settings {
         set.dont_announce_common_names = json["dont_announce_common_names"]
             .as_bool()
             .unwrap_or(set.dont_announce_common_names);
+
+        set.message_bots = json["message_bots"]
+            .as_str()
+            .unwrap_or(&set.message_bots)
+            .to_string();
+        set.message_cheaters = json["message_cheaters"]
+            .as_str()
+            .unwrap_or(&set.message_cheaters)
+            .to_string();
+        set.message_both = json["message_both"]
+            .as_str()
+            .unwrap_or(&set.message_both)
+            .to_string();
+
+        set.message_same_team = json["message_same_team"]
+            .as_str()
+            .unwrap_or(&set.message_same_team)
+            .to_string();
+        set.message_enemy_team = json["message_enemy_team"]
+            .as_str()
+            .unwrap_or(&set.message_enemy_team)
+            .to_string();
+        set.message_both_teams = json["message_both_teams"]
+            .as_str()
+            .unwrap_or(&set.message_both_teams)
+            .to_string();
+        set.message_default = json["message_default"]
+            .as_str()
+            .unwrap_or(&set.message_default)
+            .to_string();
 
         set.kick_bots = json["kick_bots"].as_bool().unwrap_or(set.kick_bots);
         set.kick_cheaters = json["kick_cheaters"].as_bool().unwrap_or(set.kick_cheaters);
@@ -139,7 +190,9 @@ impl Settings {
             .as_bool()
             .unwrap_or(set.mark_name_stealers);
 
-        set.ignore_no_api_key = json["ignore_no_api_key"].as_bool().unwrap_or(set.ignore_no_api_key);
+        set.ignore_no_api_key = json["ignore_no_api_key"]
+            .as_bool()
+            .unwrap_or(set.ignore_no_api_key);
 
         Ok(set)
     }
