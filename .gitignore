@@ -4,3 +4,4 @@
 /glium_app/target
 /perf*
 /flamegraph.svg
+/.vscode
