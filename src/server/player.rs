@@ -8,13 +8,13 @@ use glium_app::utils::persistent_window::PersistentWindow;
 use serde::Serialize;
 
 use crate::{
-    command_manager::KickReason,
     gui::{
         format_time,
         player_windows::{create_edit_notes_window, player_type_combobox},
         regex_windows::new_regex_window,
         truncate, TRUNC_LEN,
     },
+    io::command_manager::KickReason,
     player_checker::PlayerRecord,
     state::State,
     steamapi::AccountInfo,

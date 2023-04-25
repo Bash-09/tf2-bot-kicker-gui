@@ -5,8 +5,7 @@ use egui::{Color32, Context, Id, Label, Separator, Ui};
 use glium_app::utils::persistent_window::{PersistentWindow, PersistentWindowManager};
 
 use crate::{
-    command_manager::CommandManager,
-    logwatcher::LogWatcher,
+    io::{command_manager::CommandManager, IORequest},
     server::player::{Player, PlayerType, Team, UserAction},
     state::State,
     steamapi,
@@ -22,12 +21,7 @@ pub mod chat_window;
 pub mod player_windows;
 pub mod regex_windows;
 
-pub fn render(
-    gui_ctx: &Context,
-    windows: &mut PersistentWindowManager<State>,
-    state: &mut State,
-    cmd: &mut CommandManager,
-) {
+pub fn render(gui_ctx: &Context, windows: &mut PersistentWindowManager<State>, state: &mut State) {
     // Top menu bar
     egui::TopBottomPanel::top("top_panel").show(gui_ctx, |ui| {
         // File
@@ -41,7 +35,9 @@ pub fn render(
                                 Err(_) => pb.to_string_lossy().to_string(),
                             };
                             state.settings.tf2_directory = dir;
-                            state.log = LogWatcher::use_directory(&state.settings.tf2_directory);
+                            state.io.send(crate::io::IORequest::UpdateDirectory(
+                                state.settings.tf2_directory.clone(),
+                            ));
                         }
                         None => {}
                     }
@@ -159,7 +155,9 @@ pub fn render(
 
             ui.horizontal(|ui| {
                 ui.label("RCon Password: ");
-                ui.text_edit_singleline(&mut state.settings.rcon_password);
+                if ui.text_edit_singleline(&mut state.settings.rcon_password).changed() {
+                    state.io.send(IORequest::UpdateRconPassword(state.settings.rcon_password.clone()));
+                }
             });
 
             ui.horizontal(|ui| {
@@ -219,8 +217,9 @@ pub fn render(
 
     // Main window with info and players
     egui::CentralPanel::default().show(gui_ctx, |ui| {
-        if state.log.is_none() {
-            ui.label("No valid TF2 directory set. (It should be the one inside \"common\")\n\n");
+        if let Err(e) = &state.log_open {
+            ui.label(&format!("Could not open log file: {}", e));
+            ui.label("Have you set your TF2 directory properly? (It should be the one inside \"common\")\n\n");
             ui.label("Instructions:");
             ui.horizontal(|ui| {
                 ui.label("1. Add");
@@ -242,7 +241,7 @@ pub fn render(
                                 }
                             };
                             state.settings.tf2_directory = dir;
-                            state.log = LogWatcher::use_directory(&state.settings.tf2_directory);
+                            state.io.send(IORequest::UpdateDirectory(state.settings.tf2_directory.clone()));
                         },
                         None => {}
                     }
@@ -251,16 +250,19 @@ pub fn render(
             });
             ui.label("3. Start the program and enjoy the game!\n\n");
             ui.label("Note: If you have set your TF2 directory but are still seeing this message, ensure you have added the launch options and launched the game before trying again.");
-
-
+            ui.add_space(15.0);
+            ui.label("If you have set your TF2 directory and the appropriate launch settings, try launching the game and reopening this application.");
         } else {
             match state.is_connected() {
                 // Connected and good
-                Ok(_) => {
+                Ok(false) => {
+                    ui.label("Connecting...");
+                }
+                Ok(true) => {
                     if state.server.get_players().is_empty() {
                         ui.label("Not currently connected to a server.");
                     } else {
-                        render_players(ui, state, windows, cmd);
+                        render_players(ui, state, windows);
                     }
                 },
                 // RCON couldn't connect
@@ -328,12 +330,7 @@ pub fn truncate(s: &str, max_chars: usize) -> &str {
 }
 
 // Ui for a player
-fn render_players(
-    ui: &mut Ui,
-    state: &mut State,
-    windows: &mut PersistentWindowManager<State>,
-    cmd: &mut CommandManager,
-) {
+fn render_players(ui: &mut Ui, state: &mut State, windows: &mut PersistentWindowManager<State>) {
     egui::ScrollArea::vertical().show(ui, |ui| {
         let mut remaining_players = Vec::new();
         let mut action: Option<(UserAction, &Player)> = None;
@@ -421,7 +418,12 @@ fn render_players(
                     state.player_checker.update_player_record(record);
                 }
                 UserAction::Kick(reason) => {
-                    cmd.kick_player(&player.userid, reason);
+                    state
+                        .io
+                        .send(IORequest::RunCommand(CommandManager::kick_player_command(
+                            &player.userid,
+                            reason,
+                        )));
                 }
                 UserAction::GetProfile(steamid32) => {
                     state.steamapi_request_sender.send(steamid32).ok();

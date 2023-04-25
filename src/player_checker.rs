@@ -68,6 +68,7 @@ impl PlayerChecker {
         self.update_player_record(player.get_record());
     }
 
+    /// Inserts the player's record into the saved records
     pub fn update_player_record(&mut self, player: PlayerRecord) {
         if player.player_type == PlayerType::Player && player.notes.is_empty() {
             self.players.remove(&player.steamid);

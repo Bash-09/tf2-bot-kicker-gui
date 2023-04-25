@@ -61,15 +61,13 @@ impl IOManager {
         let (tsend, mrecv) = crossbeam_channel::unbounded();
         log::debug!("Spawning IO thread");
 
+        let dir = settings.tf2_directory.clone();
+        let pwd = settings.rcon_password.clone();
+
         // Thread to do stuff on
         std::thread::spawn(move || {
             log::debug!("IO Thread running");
-            let mut io = IOThread::new(
-                tsend,
-                trecv,
-                settings.tf2_directory.clone(),
-                settings.rcon_password.clone(),
-            );
+            let mut io = IOThread::new(tsend, trecv, dir, pwd);
 
             io.reopen_log();
             io.reconnect_rcon();
@@ -83,6 +81,20 @@ impl IOManager {
         IOManager {
             sender: msend,
             receiver: mrecv,
+        }
+    }
+
+    /// Send a message to the IO thread
+    pub fn send(&mut self, msg: IORequest) {
+        self.sender.send(msg).expect("Sending message to IO thread");
+    }
+
+    /// Receive a message from the IO thread, returns none if there are no messages waiting.
+    pub fn recv(&mut self) -> Option<IOResponse> {
+        match self.receiver.try_recv() {
+            Ok(resp) => Some(resp),
+            Err(crossbeam_channel::TryRecvError::Empty) => None,
+            Err(_) => panic!("Lost connection to IO thread"),
         }
     }
 }
@@ -132,12 +144,11 @@ impl IOThread {
 
     /// Parse all of the new log entries that have been written
     fn handle_log(&mut self) {
-        if self.log_watcher.is_none() {
+        if self.log_watcher.as_ref().is_none() {
             return;
         }
 
-        let mut lw = self.log_watcher.unwrap();
-        while let Some(line) = lw.next_line() {
+        while let Some(line) = self.log_watcher.as_mut().unwrap().next_line() {
             // Match status
             if let Some(caps) = self.regex_status.captures(&line) {
                 let status_line = StatusLine::parse(caps);

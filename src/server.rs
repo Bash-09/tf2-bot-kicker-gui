@@ -6,8 +6,10 @@ pub mod player;
 use player::Player;
 use player::PlayerState;
 
-use crate::command_manager::CommandManager;
-use crate::command_manager::KickReason;
+use crate::io::command_manager::CommandManager;
+use crate::io::command_manager::KickReason;
+use crate::io::IOManager;
+use crate::io::IORequest;
 use crate::player_checker::PlayerRecord;
 use crate::ringbuffer::RingBuffer;
 
@@ -115,13 +117,9 @@ impl Server {
     pub fn kick_players_of_type(
         &mut self,
         settings: &Settings,
-        cmd: &mut CommandManager,
+        io: &mut IOManager,
         player_type: PlayerType,
     ) {
-        if cmd.connected(&settings.rcon_password).is_err() {
-            return;
-        }
-
         if !settings.kick_bots {
             return;
         }
@@ -140,11 +138,17 @@ impl Server {
             match self.players.get(&settings.user) {
                 Some(user) => {
                     if user.team == p.team {
-                        cmd.kick_player(&p.userid, KickReason::Cheating);
+                        io.send(IORequest::RunCommand(CommandManager::kick_player_command(
+                            &p.userid,
+                            KickReason::Cheating,
+                        )));
                     }
                 }
                 None => {
-                    cmd.kick_player(&p.userid, KickReason::Cheating);
+                    io.send(IORequest::RunCommand(CommandManager::kick_player_command(
+                        &p.userid,
+                        KickReason::Cheating,
+                    )));
                 }
             }
         }
@@ -182,7 +186,7 @@ impl Server {
         }
     }
 
-    pub fn send_chat_messages(&mut self, settings: &Settings, cmd: &mut CommandManager) {
+    pub fn send_chat_messages(&mut self, settings: &Settings, io: &mut IOManager) {
         let mut message = String::new();
 
         let mut bots = false;
@@ -271,7 +275,9 @@ impl Server {
         }
 
         // Send message
-        cmd.send_chat(&message);
+        io.send(IORequest::RunCommand(CommandManager::send_chat_command(
+            &message,
+        )));
     }
 
     /// Create and add a demo player to the server list to test with

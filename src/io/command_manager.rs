@@ -67,7 +67,7 @@ impl CommandManager {
     }
 
     pub fn run_command(&mut self, command: &str) -> rcon::Result<String> {
-        let mut out;
+        let mut out = None;
         if self.rcon.is_none() {
             self.try_connect()?;
         }
@@ -76,23 +76,22 @@ impl CommandManager {
 
         self.runtime.block_on(async {
             if let Some(rcon) = &mut self.rcon {
-                out = rcon.cmd(command).await;
+                out = Some(rcon.cmd(command).await);
             }
         });
 
-        if out.is_err() {
+        if out.as_ref().unwrap().is_err() {
             self.rcon = None;
         }
 
-        out
+        out.unwrap()
     }
 
-    pub fn kick_player(&mut self, player_userid: &str, reason: KickReason) -> rcon::Result<String> {
-        let command = format!("callvote kick \"{} {}\"", player_userid, reason);
-        self.run_command(&command)
+    pub fn kick_player_command(player_userid: &str, reason: KickReason) -> String {
+        format!("callvote kick \"{} {}\"", player_userid, reason)
     }
 
-    pub fn send_chat(&mut self, message: &str) -> rcon::Result<String> {
-        self.run_command(&format!("say \"{}\"", message))
+    pub fn send_chat_command(message: &str) -> String {
+        format!("say \"{}\"", message)
     }
 }

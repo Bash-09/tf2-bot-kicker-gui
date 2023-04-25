@@ -6,9 +6,8 @@ extern crate rfd;
 extern crate serde;
 extern crate steam_api;
 
-pub mod command_manager;
 pub mod gui;
-pub mod logwatcher;
+pub mod io;
 pub mod player_checker;
 pub mod ringbuffer;
 pub mod server;
@@ -19,7 +18,6 @@ pub mod timer;
 pub mod version;
 
 use chrono::{DateTime, Local};
-use command_manager::CommandManager;
 use crossbeam_channel::TryRecvError;
 use egui::{Align2, Vec2};
 use egui_winit::winit::{
@@ -37,12 +35,12 @@ use glium_app::{
     Application,
 };
 use image::{EncodableLayout, ImageFormat};
+
 use player_checker::{PLAYER_LIST, REGEX_LIST};
 use server::{player::PlayerType, *};
 use state::State;
 use std::{io::Cursor, time::SystemTime};
 use version::VersionResponse;
-mod regexes;
 
 fn main() {
     env_logger::init();
@@ -83,8 +81,6 @@ fn main() {
 
 pub struct TF2BotKicker {
     state: State,
-    cmd: CommandManager,
-
     windows: PersistentWindowManager<State>,
 }
 
@@ -99,11 +95,8 @@ impl TF2BotKicker {
     pub fn new(demo_mode: bool) -> TF2BotKicker {
         let state = State::new(demo_mode);
 
-        let cmd = CommandManager::new(&state.settings.rcon_password);
-
         Self {
             state,
-            cmd,
             windows: PersistentWindowManager::new(),
         }
     }
@@ -125,7 +118,7 @@ impl Application for TF2BotKicker {
         if self.state.settings.launch_tf2 {
             if let Err(e) = std::process::Command::new("steam")
                 .arg("steam://rungameid/440")
-                .output()
+                .spawn()
             {
                 self.windows
                     .push(PersistentWindow::new(Box::new(move |id, _, ctx, _| {
@@ -143,12 +136,9 @@ impl Application for TF2BotKicker {
     }
 
     fn update(&mut self, _t: &glium_app::Timer, ctx: &mut Context) {
-        let TF2BotKicker {
-            state,
-            cmd: _,
-            windows,
-        } = self;
+        let TF2BotKicker { state, windows } = self;
 
+        // Check latest version
         if let Some(latest) = &mut state.latest_version {
             match latest.try_recv() {
                 Ok(Ok(latest)) => {
@@ -193,6 +183,9 @@ impl Application for TF2BotKicker {
             }
         }
 
+        // Handle incoming messages from IO thread
+        state.handle_messages();
+
         // Send steamid requests if an API key is set
         if state.settings.steamapi_key.is_empty() {
             state.server.pending_lookup.clear();
@@ -223,7 +216,7 @@ impl Application for TF2BotKicker {
 
         // Refresh server
         if state.refresh_timer.update() {
-            state.refresh(&mut self.cmd);
+            state.refresh();
 
             // Close if TF2 has been closed and we want to close now
             if state.has_connected()
@@ -240,34 +233,13 @@ impl Application for TF2BotKicker {
             log::debug!("{}", format!("Refreshed ({})", datetime.format("%T")));
         }
 
-        // Parse output from `status` and other console output
-        match &mut state.log {
-            Some(lw) => {
-                // If there is a loaded dir, process any new console lines
-                while let Some(line) = lw.next_line() {
-                    if let Some(c) = state.regx_status.r.captures(&line) {
-                        (state.regx_status.f)(
-                            &mut state.server,
-                            &line,
-                            c,
-                            &state.settings,
-                            &mut state.player_checker,
-                            &mut self.cmd,
-                        );
-                        continue;
-                    }
-                }
-            }
-            None => {}
-        }
-
         // Kick Bots and Cheaters
         if !state.settings.paused {
             if state.kick_timer.update() {
                 if state.settings.kick_bots {
                     state.server.kick_players_of_type(
                         &state.settings,
-                        &mut self.cmd,
+                        &mut state.io,
                         PlayerType::Bot,
                     );
                 }
@@ -275,7 +247,7 @@ impl Application for TF2BotKicker {
                 if state.settings.kick_cheaters {
                     state.server.kick_players_of_type(
                         &state.settings,
-                        &mut self.cmd,
+                        &mut state.io,
                         PlayerType::Cheater,
                     );
                 }
@@ -284,14 +256,14 @@ impl Application for TF2BotKicker {
             if state.alert_timer.update() {
                 state
                     .server
-                    .send_chat_messages(&state.settings, &mut self.cmd);
+                    .send_chat_messages(&state.settings, &mut state.io);
             }
         }
 
         let mut target = ctx.dis.draw();
 
         let _ = ctx.gui.run(&ctx.dis, |gui_ctx| {
-            gui::render(gui_ctx, windows, state, &mut self.cmd);
+            gui::render(gui_ctx, windows, state);
             windows.render(state, gui_ctx);
         });
 
