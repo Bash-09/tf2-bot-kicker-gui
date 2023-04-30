@@ -46,3 +46,4 @@ regex = "1.5.4"
 log = "*"
 env_logger = "*"
 image = { version = "0.24.2", features = ["jpeg", "png"] }
+egui_dock = { version = "0.5.0", features = ["serde"] }

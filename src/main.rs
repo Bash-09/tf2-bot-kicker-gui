@@ -20,6 +20,7 @@ pub mod version;
 use chrono::{DateTime, Local};
 use crossbeam_channel::TryRecvError;
 use egui::{Align2, Vec2};
+use egui_dock::{DockArea, NodeIndex, Tree};
 use egui_winit::{
     egui,
     winit::{
@@ -27,6 +28,7 @@ use egui_winit::{
         window::{Icon, WindowBuilder},
     },
 };
+use gui::GuiTab;
 use image::{EncodableLayout, ImageFormat};
 
 use player_checker::{PLAYER_LIST, REGEX_LIST};
@@ -69,6 +71,7 @@ fn main() {
 pub struct TF2BotKicker {
     state: State,
     windows: PersistentWindowManager<State>,
+    gui_tree: Tree<GuiTab>,
 }
 
 impl Default for TF2BotKicker {
@@ -82,9 +85,13 @@ impl TF2BotKicker {
     pub fn new(demo_mode: bool) -> TF2BotKicker {
         let state = State::new(demo_mode);
 
+        let mut gui_tree = Tree::new(vec![GuiTab::Players]);
+        gui_tree.split_left(NodeIndex::root(), 0.2, vec![GuiTab::Settings]);
+
         Self {
             state,
             windows: PersistentWindowManager::new(),
+            gui_tree,
         }
     }
 }
@@ -127,7 +134,11 @@ impl wgpu_app::Application for TF2BotKicker {
         _t: &wgpu_app::Timer,
         ctx: &mut wgpu_app::context::Context,
     ) -> Result<(), wgpu::SurfaceError> {
-        let TF2BotKicker { state, windows } = self;
+        let TF2BotKicker {
+            state,
+            windows,
+            gui_tree,
+        } = self;
 
         // Check latest version
         if let Some(latest) = &mut state.latest_version {
@@ -254,7 +265,17 @@ impl wgpu_app::Application for TF2BotKicker {
         // Render *****************88
         let output = ctx.wgpu_state.surface.get_current_texture()?;
         ctx.egui.render(&mut ctx.wgpu_state, &output, |gui_ctx| {
-            gui::render(gui_ctx, windows, state);
+            gui::render_top_panel(gui_ctx, state, gui_tree);
+            DockArea::new(gui_tree).show(gui_ctx, state);
+
+            // Get new persistent windows
+            if !state.new_persistent_windows.is_empty() {
+                let mut new_windows = Vec::new();
+                std::mem::swap(&mut new_windows, &mut state.new_persistent_windows);
+                for w in new_windows {
+                    windows.push(w);
+                }
+            }
             windows.render(state, gui_ctx);
         });
         output.present();

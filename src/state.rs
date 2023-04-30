@@ -1,8 +1,10 @@
 use std::error::Error;
 
 use crossbeam_channel::{Receiver, Sender};
+use wgpu_app::utils::persistent_window::PersistentWindow;
 
 use crate::{
+    gui,
     io::{
         command_manager,
         regexes::{ChatMessage, LobbyLine, PlayerKill, StatusLine},
@@ -41,11 +43,35 @@ pub struct State {
     pub io: IOManager,
 
     pub ui_context_menu_open: Option<usize>,
+    pub new_persistent_windows: Vec<PersistentWindow<State>>,
 }
 
 impl Default for State {
     fn default() -> Self {
         Self::new(false)
+    }
+}
+
+impl egui_dock::TabViewer for State {
+    type Tab = gui::GuiTab;
+
+    fn ui(&mut self, ui: &mut egui::Ui, tab: &mut gui::GuiTab) {
+        match tab {
+            gui::GuiTab::Settings => gui::render_settings(ui, self),
+            gui::GuiTab::Players => gui::render_players(ui, self),
+            gui::GuiTab::ChatLog => todo!(),
+            gui::GuiTab::DeathLog => todo!(),
+        }
+    }
+
+    fn title(&mut self, tab: &mut gui::GuiTab) -> egui::WidgetText {
+        match tab {
+            gui::GuiTab::Settings => "Settings",
+            gui::GuiTab::Players => "Players",
+            gui::GuiTab::ChatLog => "Chat",
+            gui::GuiTab::DeathLog => "Kills",
+        }
+        .into()
     }
 }
 
@@ -159,6 +185,7 @@ impl State {
             io,
 
             ui_context_menu_open: None,
+            new_persistent_windows: Vec::new(),
         }
     }
 
