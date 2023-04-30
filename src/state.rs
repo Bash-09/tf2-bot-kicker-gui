@@ -5,7 +5,7 @@ use crossbeam_channel::{Receiver, Sender};
 use crate::{
     io::{
         command_manager,
-        regexes::{LobbyLine, StatusLine},
+        regexes::{ChatMessage, LobbyLine, PlayerKill, StatusLine},
         IOManager, IORequest, IOResponse,
     },
     player_checker::{PlayerChecker, PlayerRecord, PLAYER_LIST, REGEX_LIST},
@@ -204,6 +204,8 @@ impl State {
                 }
                 IOResponse::Status(status) => self.handle_status(status),
                 IOResponse::Lobby(lobby) => self.handle_lobby(lobby),
+                IOResponse::Chat(chat) => self.handle_chat(chat),
+                IOResponse::Kill(kill) => self.handle_kill(kill),
             }
         }
     }
@@ -326,5 +328,23 @@ impl State {
             p.team = lobby.team;
             p.accounted = true;
         }
+    }
+
+    fn handle_chat(&mut self, chat: ChatMessage) {
+        log::info!(
+            "Got chat message from {}: {}",
+            chat.player_name,
+            chat.message
+        );
+    }
+
+    fn handle_kill(&mut self, kill: PlayerKill) {
+        log::info!(
+            "{} killed {} with {}{}",
+            kill.killer_name,
+            kill.victim_name,
+            kill.weapon,
+            if kill.crit { " (crit)" } else { "" }
+        );
     }
 }

@@ -281,7 +281,7 @@ impl Player {
                 ui.label("☑");
             }
 
-            // VAC and game bans
+            // VAC and game bans, young account, or couldn't fetch profile
             if let Some(Ok(info)) = &self.account_info {
                 if info.bans.VACBanned {
                     ui.label(RichText::new("V").color(Color32::RED));
@@ -289,6 +289,16 @@ impl Player {
                 if info.bans.NumberOfGameBans > 0 {
                     ui.label(RichText::new("G").color(Color32::RED));
                 }
+                if let Some(time) = info.summary.timecreated {
+                    let age = Utc::now()
+                        .naive_local()
+                        .signed_duration_since(NaiveDateTime::from_timestamp(time as i64, 0));
+                    if age.num_days() < (365) {
+                        ui.label(RichText::new("Y").color(Color32::from_rgb(255, 165, 0)));
+                    }
+                }
+            } else if let Some(Err(_)) = &self.account_info {
+                ui.label(RichText::new("P").color(Color32::RED));
             }
 
             // Cheater / Bot / Joining
@@ -346,6 +356,13 @@ impl Player {
                                 } else {
                                     ui.label(&format!("Account Age: {} days", days));
                                 }
+
+                                if age.num_days() < (365) {
+                                    ui.label(
+                                        RichText::new("Young account")
+                                            .color(Color32::from_rgb(255, 165, 0)),
+                                    );
+                                }
                             }
 
                             if bans.VACBanned {
@@ -382,10 +399,11 @@ impl Player {
                 }
                 Err(e) => {
                     let string = format!("{}", e);
-                    ui.label(&format!("Could not fetch steam profile: {}", e));
+                    ui.label(RichText::new("Profile could not be retrieved").color(Color32::RED));
                     if string.contains("missing field `profilestate`") {
                         ui.label("Profile may not be set up.");
                     }
+                    ui.label(&format!("{}", e));
                 }
             }
             ui.add_space(10.0);

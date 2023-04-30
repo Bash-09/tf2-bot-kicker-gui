@@ -56,12 +56,42 @@ impl LogMatcher {
 ///    2: Weapon
 ///    3: Crit?
 pub const REGEX_KILL: &str = r#"^(.*)\skilled\s(.*)\swith\s(.*)\.(\s\(crit\))?$"#;
+pub struct PlayerKill {
+    pub killer_name: String,
+    pub victim_name: String,
+    pub weapon: String,
+    pub crit: bool,
+}
+
+impl PlayerKill {
+    pub fn parse(caps: Captures) -> PlayerKill {
+        PlayerKill {
+            killer_name: caps[1].to_string(),
+            victim_name: caps[2].to_string(),
+            weapon: caps[3].to_string(),
+            crit: caps.get(4).is_some(),
+        }
+    }
+}
 
 /// Chat message
 /// Matches:
 ///    0: Player
 ///    1: Message
 pub const REGEX_CHAT: &str = r#"^(?:\*DEAD\*\s)?(.*)\s:\s\s(.*)$"#;
+pub struct ChatMessage {
+    pub player_name: String,
+    pub message: String,
+}
+
+impl ChatMessage {
+    pub fn parse(caps: Captures) -> ChatMessage {
+        ChatMessage {
+            player_name: caps[1].to_string(),
+            message: caps[2].to_string(),
+        }
+    }
+}
 
 // Reads lines from output of the "status" command
 // Includes players on server, player name, state, steamid, time connected

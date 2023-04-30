@@ -13,6 +13,10 @@ use crate::settings::Settings;
 
 use self::command_manager::CommandManager;
 use self::logwatcher::LogWatcher;
+use self::regexes::ChatMessage;
+use self::regexes::PlayerKill;
+use self::regexes::REGEX_CHAT;
+use self::regexes::REGEX_KILL;
 
 pub mod command_manager;
 pub mod logwatcher;
@@ -35,6 +39,8 @@ struct IOThread {
 
     regex_status: Regex,
     regex_lobby: Regex,
+    regex_chat: Regex,
+    regex_kill: Regex,
 }
 
 /// Request an action to be done on the IO thread, such as update state, run a command in-game, etc
@@ -52,6 +58,8 @@ pub enum IOResponse {
     RCONConnected,
     Status(StatusLine),
     Lobby(LobbyLine),
+    Chat(ChatMessage),
+    Kill(PlayerKill),
 }
 
 impl IOManager {
@@ -117,6 +125,8 @@ impl IOThread {
 
             regex_status: Regex::new(REGEX_STATUS).unwrap(),
             regex_lobby: Regex::new(REGEX_LOBBY).unwrap(),
+            regex_chat: Regex::new(REGEX_CHAT).unwrap(),
+            regex_kill: Regex::new(REGEX_KILL).unwrap(),
         }
     }
 
@@ -153,6 +163,18 @@ impl IOThread {
             if let Some(caps) = self.regex_status.captures(&line) {
                 let status_line = StatusLine::parse(caps);
                 self.send_message(IOResponse::Status(status_line));
+                continue;
+            }
+            // Match chat message
+            if let Some(caps) = self.regex_chat.captures(&line) {
+                let chat = ChatMessage::parse(caps);
+                self.send_message(IOResponse::Chat(chat));
+                continue;
+            }
+            // Match player kills
+            if let Some(caps) = self.regex_kill.captures(&line) {
+                let kill = PlayerKill::parse(caps);
+                self.send_message(IOResponse::Kill(kill));
                 continue;
             }
         }
