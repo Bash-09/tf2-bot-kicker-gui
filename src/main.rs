@@ -20,7 +20,7 @@ pub mod version;
 use chrono::{DateTime, Local};
 use crossbeam_channel::TryRecvError;
 use egui::{Align2, Vec2};
-use egui_dock::{DockArea, NodeIndex, Tree};
+use egui_dock::{DockArea, Tree};
 use egui_winit::{
     egui,
     winit::{
@@ -41,7 +41,7 @@ use wgpu_app::utils::persistent_window::{PersistentWindow, PersistentWindowManag
 fn main() {
     env_logger::init();
 
-    let app = TF2BotKicker::new(std::env::var("DEMO").is_ok());
+    let app = TF2BotKicker::new();
 
     let inner_size = PhysicalSize::new(
         app.state.settings.window.width,
@@ -76,17 +76,15 @@ pub struct TF2BotKicker {
 
 impl Default for TF2BotKicker {
     fn default() -> Self {
-        Self::new(false)
+        Self::new()
     }
 }
 
 impl TF2BotKicker {
     // Create the application
-    pub fn new(demo_mode: bool) -> TF2BotKicker {
-        let state = State::new(demo_mode);
-
-        let mut gui_tree = Tree::new(vec![GuiTab::Players]);
-        gui_tree.split_left(NodeIndex::root(), 0.2, vec![GuiTab::Settings]);
+    pub fn new() -> TF2BotKicker {
+        let state = State::new();
+        let gui_tree = state.settings.saved_dock.clone();
 
         Self {
             state,
@@ -301,6 +299,7 @@ impl wgpu_app::Application for TF2BotKicker {
             settings.window.x = pos.x;
             settings.window.y = pos.y;
         }
+        settings.saved_dock = self.gui_tree.clone();
 
         if let Err(e) = settings.export() {
             log::error!("Failed to save settings: {:?}", e);

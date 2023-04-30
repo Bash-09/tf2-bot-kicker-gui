@@ -58,7 +58,9 @@ impl LogMatcher {
 pub const REGEX_KILL: &str = r#"^(.*)\skilled\s(.*)\swith\s(.*)\.(\s\(crit\))?$"#;
 pub struct PlayerKill {
     pub killer_name: String,
+    pub killer_steamid: Option<String>,
     pub victim_name: String,
+    pub victim_steamid: Option<String>,
     pub weapon: String,
     pub crit: bool,
 }
@@ -67,7 +69,9 @@ impl PlayerKill {
     pub fn parse(caps: Captures) -> PlayerKill {
         PlayerKill {
             killer_name: caps[1].to_string(),
+            killer_steamid: None,
             victim_name: caps[2].to_string(),
+            victim_steamid: None,
             weapon: caps[3].to_string(),
             crit: caps.get(4).is_some(),
         }
@@ -78,9 +82,10 @@ impl PlayerKill {
 /// Matches:
 ///    0: Player
 ///    1: Message
-pub const REGEX_CHAT: &str = r#"^(?:\*DEAD\*\s)?(.*)\s:\s\s(.*)$"#;
+pub const REGEX_CHAT: &str = r#"^(?:\*DEAD\*)?(?:\(TEAM\))?\s?(.*)\s:\s\s(.*)$"#;
 pub struct ChatMessage {
     pub player_name: String,
+    pub steamid: Option<String>,
     pub message: String,
 }
 
@@ -88,6 +93,7 @@ impl ChatMessage {
     pub fn parse(caps: Captures) -> ChatMessage {
         ChatMessage {
             player_name: caps[1].to_string(),
+            steamid: None,
             message: caps[2].to_string(),
         }
     }
@@ -116,7 +122,7 @@ impl StatusLine {
 
         StatusLine {
             userid: caps[1].to_string(),
-            name: caps[2].replace(INVIS_CHARS, "").trim().to_string(),
+            name: caps[2].to_string(),
             steamid: caps[3].to_string(),
             time: get_time(&caps[4]).unwrap_or(0),
             state: player_state,

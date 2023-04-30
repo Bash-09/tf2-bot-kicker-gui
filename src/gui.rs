@@ -1,8 +1,9 @@
 use std::{fmt::Display, ops::RangeInclusive};
 
 use clipboard::{ClipboardContext, ClipboardProvider};
-use egui::{Color32, Id, Label, Separator, Ui};
+use egui::{Color32, Id, Label, RichText, Separator, Ui};
 use egui_dock::Tree;
+use serde::{Deserialize, Serialize};
 use wgpu_app::utils::persistent_window::PersistentWindow;
 
 use crate::{
@@ -22,7 +23,7 @@ pub mod chat_window;
 pub mod player_windows;
 pub mod regex_windows;
 
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
 pub enum GuiTab {
     Settings,
     Players,
@@ -238,6 +239,80 @@ pub fn render_settings(ui: &mut Ui, state: &mut State) {
         ui.checkbox(&mut state.settings.mark_name_stealers, "Mark accounts with a stolen name as bots")
             .on_hover_text("Accounts that change their name to another account's name will be automatically marked as a name-stealing bot.");
     });
+}
+
+pub fn render_chat(ui: &mut Ui, state: &mut State) {
+    egui::ScrollArea::vertical().show_rows(
+        ui,
+        ui.text_style_height(&egui::TextStyle::Body),
+        state.server.get_chat().len(),
+        |ui, range| {
+            let messages = state.server.get_chat();
+            for i in range {
+                let msg = &messages[messages.len() - i - 1];
+
+                ui.horizontal(|ui| {
+                    if let Some(steamid) = &msg.steamid {
+                        if ui.selectable_label(false, &msg.player_name).clicked() {
+                            // TODO - Open player thing on click
+                        }
+                    } else {
+                        ui.label(&msg.player_name);
+                    }
+
+                    ui.label(format!(": {}", msg.message));
+                });
+            }
+        },
+    );
+}
+
+pub fn render_kills(ui: &mut Ui, state: &mut State) {
+    egui::ScrollArea::vertical().show_rows(
+        ui,
+        ui.text_style_height(&egui::TextStyle::Body),
+        state.server.get_kills().len(),
+        |ui, range| {
+            let kills = state.server.get_kills();
+            for i in range {
+                let kill = &kills[kills.len() - i - 1];
+
+                ui.horizontal(|ui| {
+                    if let Some(steamid) = &kill.killer_steamid {
+                        let mut name = RichText::new(&kill.killer_name);
+                        if let Some(p) = state.player_checker.check_player_steamid(steamid) {
+                            name = name.color(p.player_type.color(ui));
+                        }
+                        if ui.selectable_label(false, name).clicked() {
+                            // TODO - Open player thing on click
+                        }
+                    } else {
+                        ui.label(&kill.killer_name);
+                    }
+
+                    ui.label(" killed ");
+
+                    if let Some(steamid) = &kill.victim_steamid {
+                        let mut name = RichText::new(&kill.victim_name);
+                        if let Some(p) = state.player_checker.check_player_steamid(steamid) {
+                            name = name.color(p.player_type.color(ui));
+                        }
+                        if ui.selectable_label(false, name).clicked() {
+                            // TODO - Open player thing on click
+                        }
+                    } else {
+                        ui.label(&kill.killer_name);
+                    }
+
+                    ui.label(format!(
+                        " with {}{}",
+                        kill.weapon,
+                        if kill.crit { " (crit)" } else { "" },
+                    ));
+                });
+            }
+        },
+    );
 }
 
 // Make a selectable label which copies it's text to the clipboard on click

@@ -1,5 +1,9 @@
-use json::JsonValue;
+use egui_dock::{NodeIndex, Tree};
+
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
+use crate::gui::GuiTab;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct WindowState {
@@ -49,10 +53,14 @@ pub struct Settings {
 
     pub launch_tf2: bool,
     pub close_on_disconnect: bool,
+    pub saved_dock: Tree<GuiTab>,
 }
 
 impl Settings {
     pub fn new() -> Settings {
+        let mut gui_tree = Tree::new(vec![GuiTab::Players]);
+        gui_tree.split_left(NodeIndex::root(), 0.2, vec![GuiTab::Settings]);
+
         Settings {
             window: WindowState {
                 width: 1100,
@@ -96,6 +104,7 @@ impl Settings {
 
             launch_tf2: false,
             close_on_disconnect: false,
+            saved_dock: gui_tree,
         }
     }
 
@@ -106,19 +115,23 @@ impl Settings {
     /// a new setting or changes/removes and old one and the struct cannot be directly deserialised from the JSON anymore.
     pub fn import(file: &str) -> Result<Settings, Box<dyn std::error::Error>> {
         let contents = std::fs::read_to_string(file)?;
-        let json = json::parse(&contents)?;
+        let json: serde_json::Value = serde_json::from_str(&contents)?;
 
         let mut set = Settings::new();
 
-        if let JsonValue::Object(window) = &json["window"] {
-            if let Some(width) = window["width"].as_i32() {
+        if let Value::Object(window) = &json["window"] {
+            if let Some(width) = window["width"].as_i64() {
                 set.window.width = width.try_into().unwrap_or(set.window.width);
             }
-            if let Some(height) = window["height"].as_i32() {
+            if let Some(height) = window["height"].as_i64() {
                 set.window.height = height.try_into().unwrap_or(set.window.height);
             }
-            set.window.x = window["x"].as_i32().unwrap_or(set.window.x);
-            set.window.y = window["y"].as_i32().unwrap_or(set.window.y);
+            if let Some(x) = window["x"].as_i64() {
+                set.window.x = x.try_into().unwrap_or(set.window.x);
+            }
+            if let Some(y) = window["y"].as_i64() {
+                set.window.y = y.try_into().unwrap_or(set.window.y);
+            }
         }
 
         set.user = json["user"].as_str().unwrap_or(&set.user).to_string();
@@ -172,10 +185,17 @@ impl Settings {
         set.kick_cheaters = json["kick_cheaters"].as_bool().unwrap_or(set.kick_cheaters);
 
         set.refresh_period = json["refresh_period"]
-            .as_f32()
+            .as_f64()
+            .map(|val| val as f32)
             .unwrap_or(set.refresh_period);
-        set.kick_period = json["kick_period"].as_f32().unwrap_or(set.kick_period);
-        set.alert_period = json["alert_period"].as_f32().unwrap_or(set.alert_period);
+        set.kick_period = json["kick_period"]
+            .as_f64()
+            .map(|val| val as f32)
+            .unwrap_or(set.kick_period);
+        set.alert_period = json["alert_period"]
+            .as_f64()
+            .map(|val| val as f32)
+            .unwrap_or(set.alert_period);
 
         set.paused = json["paused"].as_bool().unwrap_or(set.paused);
 
@@ -204,6 +224,8 @@ impl Settings {
         set.close_on_disconnect = json["close_on_disconnect"]
             .as_bool()
             .unwrap_or(set.close_on_disconnect);
+
+        set.saved_dock = Tree::<GuiTab>::deserialize(&json["saved_dock"]).unwrap_or(set.saved_dock);
 
         Ok(set)
     }

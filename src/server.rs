@@ -8,6 +8,8 @@ use player::PlayerState;
 
 use crate::io::command_manager::CommandManager;
 use crate::io::command_manager::KickReason;
+use crate::io::regexes::ChatMessage;
+use crate::io::regexes::PlayerKill;
 use crate::io::IOManager;
 use crate::io::IORequest;
 use crate::player_checker::PlayerRecord;
@@ -25,6 +27,8 @@ const RINGBUFFER_LEN: usize = 48;
 
 pub struct Server {
     players: HashMap<String, Player>,
+    chat: Vec<ChatMessage>,
+    deathlog: Vec<PlayerKill>,
     pub new_connections: Vec<String>,
     pub pending_lookup: Vec<String>,
     previous_players: RingBuffer<Player>,
@@ -34,6 +38,8 @@ impl Server {
     pub fn new() -> Server {
         Server {
             players: HashMap::with_capacity(24),
+            chat: Vec::new(),
+            deathlog: Vec::new(),
             new_connections: Vec::new(),
             pending_lookup: Vec::new(),
             previous_players: RingBuffer::new(RINGBUFFER_LEN),
@@ -184,6 +190,22 @@ impl Server {
             }
             self.previous_players.push(p);
         }
+    }
+
+    pub fn add_chat(&mut self, chat: ChatMessage) {
+        self.chat.push(chat);
+    }
+
+    pub fn add_kill(&mut self, kill: PlayerKill) {
+        self.deathlog.push(kill);
+    }
+
+    pub fn get_chat(&self) -> &Vec<ChatMessage> {
+        &self.chat
+    }
+
+    pub fn get_kills(&self) -> &Vec<PlayerKill> {
+        &self.deathlog
     }
 
     pub fn send_chat_messages(&mut self, settings: &Settings, io: &mut IOManager) {

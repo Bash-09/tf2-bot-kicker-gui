@@ -10,7 +10,7 @@ use crate::{
         regexes::{ChatMessage, LobbyLine, PlayerKill, StatusLine},
         IOManager, IORequest, IOResponse,
     },
-    player_checker::{PlayerChecker, PlayerRecord, PLAYER_LIST, REGEX_LIST},
+    player_checker::{PlayerChecker, PLAYER_LIST, REGEX_LIST},
     server::{
         player::{steamid_32_to_64, Player, PlayerType, Team},
         Server,
@@ -48,7 +48,7 @@ pub struct State {
 
 impl Default for State {
     fn default() -> Self {
-        Self::new(false)
+        Self::new()
     }
 }
 
@@ -59,8 +59,8 @@ impl egui_dock::TabViewer for State {
         match tab {
             gui::GuiTab::Settings => gui::render_settings(ui, self),
             gui::GuiTab::Players => gui::render_players(ui, self),
-            gui::GuiTab::ChatLog => todo!(),
-            gui::GuiTab::DeathLog => todo!(),
+            gui::GuiTab::ChatLog => gui::render_chat(ui, self),
+            gui::GuiTab::DeathLog => gui::render_kills(ui, self),
         }
     }
 
@@ -76,7 +76,7 @@ impl egui_dock::TabViewer for State {
 }
 
 impl State {
-    pub fn new(demo_mode: bool) -> State {
+    pub fn new() -> State {
         let settings: Settings;
 
         // Attempt to load settings, create new default settings if it can't load an existing file
@@ -112,55 +112,7 @@ impl State {
         let (steamapi_request_sender, steamapi_request_receiver) =
             steamapi::create_api_thread(settings.steamapi_key.clone());
 
-        let mut server = Server::new();
-
-        // Add demo players to server
-        if demo_mode {
-            server.add_demo_player(
-                "Bash09".to_string(),
-                "U:1:103663727".to_string(),
-                Team::Invaders,
-            );
-            server.add_demo_player(
-                "Baan".to_string(),
-                "U:1:130631917".to_string(),
-                Team::Defenders,
-            );
-            server.add_demo_player(
-                "Random bot".to_string(),
-                "U:1:1314494843".to_string(),
-                Team::Defenders,
-            );
-            server.add_demo_player(
-                "SmooveB".to_string(),
-                "U:1:16722748".to_string(),
-                Team::Invaders,
-            );
-            server.add_demo_player(
-                "Some cunt".to_string(),
-                "U:1:95849406".to_string(),
-                Team::Invaders,
-            );
-            server.add_demo_player(
-                "ASS".to_string(),
-                "U:1:1203248403".to_string(),
-                Team::Defenders,
-            );
-
-            let mut records: Vec<PlayerRecord> = Vec::new();
-
-            for p in server.get_players().values() {
-                steamapi_request_sender.send(p.steamid64.clone()).ok();
-                if let Some(record) = player_checker.check_player_steamid(&p.steamid32) {
-                    records.push(record);
-                }
-            }
-
-            for r in records {
-                server.update_player_from_record(r);
-            }
-        }
-
+        let server = Server::new();
         let io = IOManager::start(&settings);
 
         State {
@@ -357,15 +309,26 @@ impl State {
         }
     }
 
-    fn handle_chat(&mut self, chat: ChatMessage) {
+    fn handle_chat(&mut self, mut chat: ChatMessage) {
         log::info!(
             "Got chat message from {}: {}",
             chat.player_name,
             chat.message
         );
+
+        if let Some((k, _)) = self
+            .server
+            .get_players()
+            .iter()
+            .find(|(_, v)| v.name == chat.player_name)
+        {
+            chat.steamid = Some(k.clone());
+        }
+
+        self.server.add_chat(chat);
     }
 
-    fn handle_kill(&mut self, kill: PlayerKill) {
+    fn handle_kill(&mut self, mut kill: PlayerKill) {
         log::info!(
             "{} killed {} with {}{}",
             kill.killer_name,
@@ -373,5 +336,34 @@ impl State {
             kill.weapon,
             if kill.crit { " (crit)" } else { "" }
         );
+
+        if let Some((k, _)) = self
+            .server
+            .get_players()
+            .iter()
+            .find(|(_, v)| v.name == kill.killer_name)
+        {
+            kill.killer_steamid = Some(k.clone());
+        } else {
+            log::error!(
+                "Player {} could not be found when processing kill.",
+                kill.killer_name
+            );
+        }
+        if let Some((k, _)) = self
+            .server
+            .get_players()
+            .iter()
+            .find(|(_, v)| v.name == kill.victim_name)
+        {
+            kill.victim_steamid = Some(k.clone());
+        } else {
+            log::error!(
+                "Player {} could not be found when processing kill.",
+                kill.victim_name
+            );
+        }
+
+        self.server.add_kill(kill);
     }
 }

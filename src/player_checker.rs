@@ -8,6 +8,7 @@ use std::path::Path;
 
 use regex::Regex;
 use serde::Serialize;
+use serde_json::Value;
 
 use crate::server::player::{PlayerType, Steamid32};
 
@@ -166,9 +167,9 @@ impl PlayerChecker {
 
     pub fn read_players<P: AsRef<Path>>(&mut self, file: P) -> Result<(), Box<dyn Error>> {
         let contents = std::fs::read_to_string(file)?;
-        let json = json::parse(&contents)?;
+        let json: Value = serde_json::from_str(&contents)?;
 
-        for p in json.members() {
+        for p in json.as_array().unwrap_or(&vec![]) {
             let steamid = p["steamid"].as_str().unwrap_or("");
             let player_type = p["player_type"].as_str().unwrap_or("");
             let notes = p["notes"].as_str().unwrap_or("");
