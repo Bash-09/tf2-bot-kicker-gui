@@ -47,7 +47,7 @@ pub fn create_api_thread(key: String) -> (Sender<String>, AccountInfoReceiver) {
                                 summaries.remove(0)
                             });
                             if let Err(e) = summary {
-                                response_s.send((Some(Err(e)), None, steamid.clone())).unwrap();
+                                response_s.send((Some(Err(e)), None, steamid)).unwrap();
                                 return;
                             }
                             let summary = summary.unwrap();
@@ -61,7 +61,7 @@ pub fn create_api_thread(key: String) -> (Sender<String>, AccountInfoReceiver) {
                                 bans.remove(0)
                             });
                             if let Err(e) = bans {
-                                response_s.send((Some(Err(e)), None, steamid.clone())).unwrap();
+                                response_s.send((Some(Err(e)), None, steamid)).unwrap();
                                 return;
                             }
                             let bans = bans.unwrap();

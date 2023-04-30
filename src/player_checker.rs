@@ -155,7 +155,7 @@ impl PlayerChecker {
         let players: Vec<&PlayerRecord> = self.players.values().collect();
 
         match serde_json::to_string(&players) {
-            Ok(contents) => std::fs::write(file, &contents)?,
+            Ok(contents) => std::fs::write(file, contents)?,
             Err(e) => {
                 log::error!("Failed to serialize players: {:?}", e);
             }

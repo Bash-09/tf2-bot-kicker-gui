@@ -283,7 +283,7 @@ impl State {
                 p.notes = record.notes;
                 log::info!("Known {:?} joining: {}", p.player_type, &p.name);
 
-                if let Some(_) = self.player_checker.check_player_name(&p.name) {
+                if self.player_checker.check_player_name(&p.name).is_some() {
                     p.common_name = true;
                 }
             }

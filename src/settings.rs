@@ -212,7 +212,7 @@ impl Settings {
     pub fn export(&self) -> Result<(), Box<dyn std::error::Error>> {
         let _new_dir = std::fs::create_dir("cfg");
         match serde_json::to_string(self) {
-            Ok(contents) => match std::fs::write("cfg/settings.json", &contents) {
+            Ok(contents) => match std::fs::write("cfg/settings.json", contents) {
                 Ok(_) => Ok(()),
                 Err(e) => Err(Box::new(e)),
             },

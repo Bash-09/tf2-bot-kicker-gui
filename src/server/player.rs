@@ -367,7 +367,7 @@ impl Player {
 
                             if bans.VACBanned {
                                 ui.label(
-                                    RichText::new(&format!(
+                                    RichText::new(format!(
                                         "This player has VAC bans: {}",
                                         bans.NumberOfVACBans
                                     ))
@@ -377,7 +377,7 @@ impl Player {
 
                             if bans.NumberOfGameBans > 0 {
                                 ui.label(
-                                    RichText::new(&format!(
+                                    RichText::new(format!(
                                         "This player has Game bans: {}",
                                         bans.NumberOfGameBans
                                     ))
@@ -387,7 +387,7 @@ impl Player {
 
                             if bans.VACBanned || bans.NumberOfGameBans > 0 {
                                 ui.label(
-                                    RichText::new(&format!(
+                                    RichText::new(format!(
                                         "Days since last ban: {}",
                                         bans.DaysSinceLastBan
                                     ))
