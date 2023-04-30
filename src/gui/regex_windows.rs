@@ -1,6 +1,6 @@
 use egui::Id;
-use glium_app::utils::persistent_window::PersistentWindow;
 use regex::Regex;
+use wgpu_app::utils::persistent_window::PersistentWindow;
 
 use crate::state::State;
 
@@ -70,14 +70,17 @@ pub fn view_regexes_window() -> PersistentWindow<State> {
                             ui.horizontal(|ui| {
                                 ui.label(regex.as_str());
 
-                                ui.with_layout(egui::Layout::right_to_left(), |ui| {
-                                    if ui.button("Delete").clicked() {
-                                        action = Some(Action::Delete(i));
-                                    }
-                                    if ui.button("Edit").clicked() {
-                                        action = Some(Action::Edit(i));
-                                    }
-                                });
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::TOP),
+                                    |ui| {
+                                        if ui.button("Delete").clicked() {
+                                            action = Some(Action::Delete(i));
+                                        }
+                                        if ui.button("Edit").clicked() {
+                                            action = Some(Action::Edit(i));
+                                        }
+                                    },
+                                );
                             });
                         }
                     });

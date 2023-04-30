@@ -1,5 +1,5 @@
 use egui::{Id, Separator};
-use glium_app::utils::persistent_window::PersistentWindow;
+use wgpu_app::utils::persistent_window::PersistentWindow;
 
 use crate::state::State;
 

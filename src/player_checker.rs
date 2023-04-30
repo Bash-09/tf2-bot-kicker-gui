@@ -49,12 +49,9 @@ impl PlayerChecker {
     ///
     /// Returns true if a regex was matched and false otherwise.
     pub fn check_player_name(&mut self, name: &str) -> Option<&Regex> {
-        for regx in self.bots_regx.iter() {
-            if regx.captures(name).is_some() {
-                return Some(regx);
-            }
-        }
-        None
+        self.bots_regx
+            .iter()
+            .find(|&regx| regx.captures(name).is_some())
     }
 
     /// Loads a player's record from the persistent record if it exists and restores

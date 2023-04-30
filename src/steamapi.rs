@@ -3,8 +3,8 @@ use std::thread;
 use crossbeam_channel::{Sender, Receiver, unbounded};
 use egui::Id;
 use egui_extras::RetainedImage;
-use glium_app::utils::persistent_window::PersistentWindow;
 use steam_api::structs::{summaries, friends, bans};
+use wgpu_app::utils::persistent_window::PersistentWindow;
 
 use crate::state::State;
 

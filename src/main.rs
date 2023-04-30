@@ -20,19 +20,12 @@ pub mod version;
 use chrono::{DateTime, Local};
 use crossbeam_channel::TryRecvError;
 use egui::{Align2, Vec2};
-use egui_winit::winit::{
-    dpi::{PhysicalPosition, PhysicalSize},
-    window::{Icon, WindowBuilder},
-};
-use glium::{
-    glutin::{self, ContextBuilder},
-    Display,
-};
-use glium_app::{
-    context::Context,
-    run_with_context,
-    utils::persistent_window::{PersistentWindow, PersistentWindowManager},
-    Application,
+use egui_winit::{
+    egui,
+    winit::{
+        dpi::{PhysicalPosition, PhysicalSize},
+        window::{Icon, WindowBuilder},
+    },
 };
 use image::{EncodableLayout, ImageFormat};
 
@@ -41,6 +34,7 @@ use server::{player::PlayerType, *};
 use state::State;
 use std::{io::Cursor, time::SystemTime};
 use version::VersionResponse;
+use wgpu_app::utils::persistent_window::{PersistentWindow, PersistentWindowManager};
 
 fn main() {
     env_logger::init();
@@ -69,14 +63,7 @@ fn main() {
         .with_resizable(true)
         .with_inner_size(inner_size)
         .with_position(outer_pos);
-
-    let event_loop = glutin::event_loop::EventLoop::new();
-    let cb = ContextBuilder::new().with_vsync(true);
-    let display = Display::new(wb, cb, &event_loop).expect("Failed to open Display!");
-    let egui_glium = egui_glium::EguiGlium::new(&display);
-    let context: Context = Context::new(display, egui_glium);
-
-    run_with_context(app, context, event_loop);
+    wgpu_app::run(app, wb);
 }
 
 pub struct TF2BotKicker {
@@ -102,8 +89,8 @@ impl TF2BotKicker {
     }
 }
 
-impl Application for TF2BotKicker {
-    fn init(&mut self, _ctx: &mut glium_app::context::Context) {
+impl wgpu_app::Application for TF2BotKicker {
+    fn init(&mut self, _ctx: &mut wgpu_app::context::Context) {
         self.state.refresh_timer.reset();
         self.state.kick_timer.reset();
         self.state.alert_timer.reset();
@@ -135,7 +122,11 @@ impl Application for TF2BotKicker {
         }
     }
 
-    fn update(&mut self, _t: &glium_app::Timer, ctx: &mut Context) {
+    fn update(
+        &mut self,
+        _t: &wgpu_app::Timer,
+        ctx: &mut wgpu_app::context::Context,
+    ) -> Result<(), wgpu::SurfaceError> {
         let TF2BotKicker { state, windows } = self;
 
         // Check latest version
@@ -208,7 +199,7 @@ impl Application for TF2BotKicker {
         let refresh = state.refresh_timer.go(state.settings.refresh_period);
 
         if refresh.is_none() {
-            return;
+            return Ok(());
         }
 
         state.kick_timer.go(state.settings.kick_period);
@@ -260,18 +251,18 @@ impl Application for TF2BotKicker {
             }
         }
 
-        let mut target = ctx.dis.draw();
-
-        let _ = ctx.gui.run(&ctx.dis, |gui_ctx| {
+        // Render *****************88
+        let output = ctx.wgpu_state.surface.get_current_texture()?;
+        ctx.egui.render(&mut ctx.wgpu_state, &output, |gui_ctx| {
             gui::render(gui_ctx, windows, state);
             windows.render(state, gui_ctx);
         });
+        output.present();
 
-        ctx.gui.paint(&ctx.dis, &mut target);
-        target.finish().unwrap();
+        Ok(())
     }
 
-    fn close(&mut self, ctx: &Context) {
+    fn close(&mut self, ctx: &wgpu_app::context::Context) {
         if let Err(e) = self.state.player_checker.save_players(PLAYER_LIST) {
             log::error!("Failed to save players: {:?}", e);
         }
@@ -279,11 +270,8 @@ impl Application for TF2BotKicker {
             log::error!("Failed to save regexes: {:?}", e);
         }
 
-        let gl_window = ctx.dis.gl_window();
-        let window = gl_window.window();
-
-        let size = window.inner_size();
-        let position = window.outer_position();
+        let size = ctx.wgpu_state.window.inner_size();
+        let position = ctx.wgpu_state.window.outer_position();
 
         let settings = &mut self.state.settings;
         settings.window.width = size.width;
@@ -298,5 +286,10 @@ impl Application for TF2BotKicker {
         }
     }
 
-    fn handle_event(&mut self, _: &mut Context, _: &egui_winit::winit::event::Event<()>) {}
+    fn handle_event(
+        &mut self,
+        _: &mut wgpu_app::context::Context,
+        _: &egui_winit::winit::event::Event<()>,
+    ) {
+    }
 }

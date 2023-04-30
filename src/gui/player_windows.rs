@@ -1,12 +1,12 @@
 use std::error::Error;
 
 use clipboard::{ClipboardContext, ClipboardProvider};
-use egui::{Id, Label, RichText, SelectableLabel, Vec2, Ui, ComboBox};
-use glium_app::utils::persistent_window::PersistentWindow;
+use egui::{ComboBox, Id, Label, RichText, SelectableLabel, Ui, Vec2};
+use wgpu_app::utils::persistent_window::PersistentWindow;
 
 use crate::{
     player_checker::PlayerRecord,
-    server::player::{PlayerType, UserAction, Player},
+    server::player::{Player, PlayerType, UserAction},
     state::State,
 };
 
@@ -117,7 +117,7 @@ pub fn saved_players_window() -> PersistentWindow<State> {
                                     ui.add_sized(
                                         Vec2::new(50.0, 20.0),
                                         Label::new(
-                                            RichText::new(&format!("{:?}", p.player_type))
+                                            RichText::new(format!("{:?}", p.player_type))
                                                 .color(p.player_type.color(ui)),
                                         ),
                                     );
@@ -220,7 +220,12 @@ pub fn recent_players_window() -> PersistentWindow<State> {
                             ui.horizontal(|ui| {
                                 ui.set_width(width);
 
-                                if let Some(returned_action) = player.render_player(ui, &state.settings.user, false, !state.settings.steamapi_key.is_empty()) {
+                                if let Some(returned_action) = player.render_player(
+                                    ui,
+                                    &state.settings.user,
+                                    false,
+                                    !state.settings.steamapi_key.is_empty(),
+                                ) {
                                     action = Some((returned_action, player));
                                 }
                             });
@@ -232,14 +237,18 @@ pub fn recent_players_window() -> PersistentWindow<State> {
                                 UserAction::Update(record) => {
                                     state.server.update_player_from_record(record.clone());
                                     state.player_checker.update_player_record(record);
-                                },
-                                UserAction::Kick(_) => { log::error!("Was able to kick from the recent players window??"); },
+                                }
+                                UserAction::Kick(_) => {
+                                    log::error!(
+                                        "Was able to kick from the recent players window??"
+                                    );
+                                }
                                 UserAction::GetProfile(steamid32) => {
                                     state.steamapi_request_sender.send(steamid32).ok();
-                                },
+                                }
                                 UserAction::OpenWindow(window) => {
                                     windows.push(window);
-                                },
+                                }
                             }
                         }
                     },

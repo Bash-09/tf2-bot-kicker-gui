@@ -21,7 +21,7 @@ impl LogWatcher {
 
     /// Internally called by [use_directory]
     pub fn register(filename: &str) -> Result<LogWatcher, io::Error> {
-        let f = match File::open(&filename) {
+        let f = match File::open(filename) {
             Ok(x) => x,
             Err(err) => match err.kind() {
                 io::ErrorKind::NotFound => {

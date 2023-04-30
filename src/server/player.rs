@@ -4,8 +4,8 @@ use chrono::{NaiveDateTime, Utc};
 use clipboard::{ClipboardContext, ClipboardProvider};
 use egui::{Color32, Label, RichText, Ui, Vec2};
 use egui_extras::RetainedImage;
-use glium_app::utils::persistent_window::PersistentWindow;
 use serde::Serialize;
+use wgpu_app::utils::persistent_window::PersistentWindow;
 
 use crate::{
     gui::{
@@ -270,7 +270,7 @@ impl Player {
         }
 
         // Cheater, Bot and Joining labels
-        ui.with_layout(egui::Layout::right_to_left(), |ui| {
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
             ui.add_space(15.0);
 
             // Time

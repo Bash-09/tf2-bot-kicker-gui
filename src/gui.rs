@@ -1,8 +1,8 @@
 use std::ops::RangeInclusive;
 
 use clipboard::{ClipboardContext, ClipboardProvider};
-use egui::{Color32, Context, Id, Label, Separator, Ui};
-use glium_app::utils::persistent_window::{PersistentWindow, PersistentWindowManager};
+use egui::{Color32, Id, Label, Separator, Ui};
+use wgpu_app::utils::persistent_window::{PersistentWindow, PersistentWindowManager};
 
 use crate::{
     io::{command_manager::CommandManager, IORequest},
@@ -21,25 +21,26 @@ pub mod chat_window;
 pub mod player_windows;
 pub mod regex_windows;
 
-pub fn render(gui_ctx: &Context, windows: &mut PersistentWindowManager<State>, state: &mut State) {
+pub fn render(
+    gui_ctx: &egui::Context,
+    windows: &mut PersistentWindowManager<State>,
+    state: &mut State,
+) {
     // Top menu bar
     egui::TopBottomPanel::top("top_panel").show(gui_ctx, |ui| {
         // File
         egui::menu::bar(ui, |ui| {
             ui.menu_button("File", |ui| {
                 if ui.button("Set TF2 Directory").clicked() {
-                    match rfd::FileDialog::new().pick_folder() {
-                        Some(pb) => {
-                            let dir = match pb.strip_prefix(std::env::current_dir().unwrap()) {
-                                Ok(pb) => pb.to_string_lossy().to_string(),
-                                Err(_) => pb.to_string_lossy().to_string(),
-                            };
-                            state.settings.tf2_directory = dir;
-                            state.io.send(crate::io::IORequest::UpdateDirectory(
-                                state.settings.tf2_directory.clone(),
-                            ));
-                        }
-                        None => {}
+                    if let Some(pb) = rfd::FileDialog::new().pick_folder() {
+                        let dir = match pb.strip_prefix(std::env::current_dir().unwrap()) {
+                            Ok(pb) => pb.to_string_lossy().to_string(),
+                            Err(_) => pb.to_string_lossy().to_string(),
+                        };
+                        state.settings.tf2_directory = dir;
+                        state.io.send(crate::io::IORequest::UpdateDirectory(
+                            state.settings.tf2_directory.clone(),
+                        ));
                     }
                 }
             });
@@ -58,32 +59,29 @@ pub fn render(gui_ctx: &Context, windows: &mut PersistentWindowManager<State>, s
                 }
 
                 if let Some(player_type) = import_list {
-                    match rfd::FileDialog::new().set_directory("cfg").pick_file() {
-                        Some(pb) => {
-                            let dir = match pb.strip_prefix(std::env::current_dir().unwrap()) {
-                                Ok(pb) => pb.to_string_lossy().to_string(),
-                                Err(_) => pb.to_string_lossy().to_string(),
-                            };
+                    if let Some(pb) = rfd::FileDialog::new().set_directory("cfg").pick_file() {
+                        let dir = match pb.strip_prefix(std::env::current_dir().unwrap()) {
+                            Ok(pb) => pb.to_string_lossy().to_string(),
+                            Err(_) => pb.to_string_lossy().to_string(),
+                        };
 
-                            match state
-                                .player_checker
-                                .read_from_steamid_list(&dir, player_type)
-                            {
-                                Ok(_) => {
-                                    log::info!(
-                                        "{}",
-                                        format!(
-                                            "Added {} as a steamid list",
-                                            &dir.split('/').last().unwrap()
-                                        )
-                                    );
-                                }
-                                Err(e) => {
-                                    log::error!("Failed to add steamid list: {}", format!("{}", e));
-                                }
+                        match state
+                            .player_checker
+                            .read_from_steamid_list(&dir, player_type)
+                        {
+                            Ok(_) => {
+                                log::info!(
+                                    "{}",
+                                    format!(
+                                        "Added {} as a steamid list",
+                                        &dir.split('/').last().unwrap()
+                                    )
+                                );
+                            }
+                            Err(e) => {
+                                log::error!("Failed to add steamid list: {}", format!("{}", e));
                             }
                         }
-                        None => {}
                     }
                 }
 
@@ -136,7 +134,7 @@ pub fn render(gui_ctx: &Context, windows: &mut PersistentWindowManager<State>, s
             ui.label("powered by ");
             ui.hyperlink_to("egui", "https://github.com/emilk/egui");
 
-            ui.with_layout(egui::Layout::right_to_left(), |ui| {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                 ui.label(version::VERSION);
             });
         });
@@ -230,20 +228,17 @@ pub fn render(gui_ctx: &Context, windows: &mut PersistentWindowManager<State>, s
             ui.horizontal(|ui| {
                 ui.label("2. Click");
                 if ui.button("Set your TF2 directory").clicked() {
-                    match rfd::FileDialog::new().pick_folder() {
-                        Some(pb) => {
-                            let dir = match pb.strip_prefix(std::env::current_dir().unwrap()) {
-                                Ok(pb) => {
-                                    pb.to_string_lossy().to_string()
-                                },
-                                Err(_) => {
-                                    pb.to_string_lossy().to_string()
-                                }
-                            };
-                            state.settings.tf2_directory = dir;
-                            state.io.send(IORequest::UpdateDirectory(state.settings.tf2_directory.clone()));
-                        },
-                        None => {}
+                    if let Some(pb) = rfd::FileDialog::new().pick_folder() {
+                        let dir = match pb.strip_prefix(std::env::current_dir().unwrap()) {
+                            Ok(pb) => {
+                                pb.to_string_lossy().to_string()
+                            },
+                            Err(_) => {
+                                pb.to_string_lossy().to_string()
+                            }
+                        };
+                        state.settings.tf2_directory = dir;
+                        state.io.send(IORequest::UpdateDirectory(state.settings.tf2_directory.clone()));
                     }
                 }
                 ui.label("and navigate to your Team Fortress 2 folder");
@@ -342,7 +337,7 @@ fn render_players(ui: &mut Ui, state: &mut State, windows: &mut PersistentWindow
                 ui.set_width(width);
                 ui.colored_label(Color32::WHITE, "Player Name");
 
-                ui.with_layout(egui::Layout::right_to_left(), |ui| {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                     ui.horizontal(|ui| {
                         ui.label("   ");
                         ui.colored_label(Color32::WHITE, "Time");
@@ -355,7 +350,7 @@ fn render_players(ui: &mut Ui, state: &mut State, windows: &mut PersistentWindow
                 ui.set_width(width);
                 ui.colored_label(Color32::WHITE, "Player Name");
 
-                ui.with_layout(egui::Layout::right_to_left(), |ui| {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                     ui.horizontal(|ui| {
                         ui.label("   ");
                         ui.colored_label(Color32::WHITE, "Time");
