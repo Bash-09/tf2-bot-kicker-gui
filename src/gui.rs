@@ -253,7 +253,13 @@ pub fn render_chat(ui: &mut Ui, state: &mut State) {
 
                 ui.horizontal(|ui| {
                     if let Some(steamid) = &msg.steamid {
-                        if ui.selectable_label(false, &msg.player_name).clicked() {
+                        let mut name = RichText::new(&msg.player_name);
+                        if steamid == &state.settings.user {
+                            name = name.color(Color32::LIGHT_GREEN);
+                        } else if let Some(p) = state.player_checker.check_player_steamid(steamid) {
+                            name = name.color(p.player_type.color(ui));
+                        }
+                        if ui.selectable_label(false, name).clicked() {
                             // TODO - Open player thing on click
                         }
                     } else {
@@ -280,7 +286,9 @@ pub fn render_kills(ui: &mut Ui, state: &mut State) {
                 ui.horizontal(|ui| {
                     if let Some(steamid) = &kill.killer_steamid {
                         let mut name = RichText::new(&kill.killer_name);
-                        if let Some(p) = state.player_checker.check_player_steamid(steamid) {
+                        if steamid == &state.settings.user {
+                            name = name.color(Color32::LIGHT_GREEN);
+                        } else if let Some(p) = state.player_checker.check_player_steamid(steamid) {
                             name = name.color(p.player_type.color(ui));
                         }
                         if ui.selectable_label(false, name).clicked() {
@@ -294,7 +302,9 @@ pub fn render_kills(ui: &mut Ui, state: &mut State) {
 
                     if let Some(steamid) = &kill.victim_steamid {
                         let mut name = RichText::new(&kill.victim_name);
-                        if let Some(p) = state.player_checker.check_player_steamid(steamid) {
+                        if steamid == &state.settings.user {
+                            name = name.color(Color32::LIGHT_GREEN);
+                        } else if let Some(p) = state.player_checker.check_player_steamid(steamid) {
                             name = name.color(p.player_type.color(ui));
                         }
                         if ui.selectable_label(false, name).clicked() {
