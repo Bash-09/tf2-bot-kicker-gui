@@ -143,7 +143,6 @@ impl IOThread {
                 }
                 Some(IORequest::UpdateRconPassword(pwd)) => {
                     if let Err(e) = self.command_manager.set_password(pwd) {
-                        log::error!("Could not initiate RCon connection: {:?}", e);
                         self.send_message(IOResponse::NoRCON(e));
                     }
                 }
@@ -184,7 +183,10 @@ impl IOThread {
     /// If the log file fails to be opened, an [IOResponse::NoLogFile] is sent back to the main thread and [Self::log_watcher] is set to [None]
     fn reopen_log(&mut self) {
         match LogWatcher::use_directory(&self.tf2_directory) {
-            Ok(lw) => self.log_watcher = Some(lw),
+            Ok(lw) => {
+                log::debug!("Successfully opened log file");
+                self.log_watcher = Some(lw);
+            }
             Err(e) => {
                 log::error!("Failed to open log file: {:?}", e);
                 self.send_message(IOResponse::NoLogFile(e));
@@ -193,29 +195,25 @@ impl IOThread {
     }
 
     /// Attempt to reconnect to TF2 rcon is it's currently disconnected
-    fn reconnect_rcon(&mut self) {
+    fn reconnect_rcon(&mut self) -> bool {
         if self.command_manager.is_connected() {
             self.send_message(IOResponse::RCONConnected);
-            return;
+            return true;
         }
 
         if let Err(e) = self.command_manager.try_connect() {
             self.send_message(IOResponse::NoRCON(e));
-            return;
+            return false;
         }
 
         self.send_message(IOResponse::RCONConnected);
+        true
     }
 
     /// Run a command and handle the response from it
     fn handle_command(&mut self, command: &str) {
-        if !self.command_manager.is_connected() {
-            self.reconnect_rcon();
-        }
-
         match self.command_manager.run_command(command) {
             Err(e) => {
-                log::error!("Failed to run command: {:?}", e);
                 self.send_message(IOResponse::NoRCON(e));
             }
             Ok(resp) => {

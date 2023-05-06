@@ -255,7 +255,7 @@ pub fn render_chat(ui: &mut Ui, state: &mut State) {
                     if let Some(steamid) = &msg.steamid {
                         let mut name = RichText::new(&msg.player_name);
                         if steamid == &state.settings.user {
-                            name = name.color(Color32::LIGHT_GREEN);
+                            name = name.color(Color32::GREEN);
                         } else if let Some(p) = state.player_checker.check_player_steamid(steamid) {
                             name = name.color(p.player_type.color(ui));
                         }
@@ -287,7 +287,7 @@ pub fn render_kills(ui: &mut Ui, state: &mut State) {
                     if let Some(steamid) = &kill.killer_steamid {
                         let mut name = RichText::new(&kill.killer_name);
                         if steamid == &state.settings.user {
-                            name = name.color(Color32::LIGHT_GREEN);
+                            name = name.color(Color32::GREEN);
                         } else if let Some(p) = state.player_checker.check_player_steamid(steamid) {
                             name = name.color(p.player_type.color(ui));
                         }
@@ -303,7 +303,7 @@ pub fn render_kills(ui: &mut Ui, state: &mut State) {
                     if let Some(steamid) = &kill.victim_steamid {
                         let mut name = RichText::new(&kill.victim_name);
                         if steamid == &state.settings.user {
-                            name = name.color(Color32::LIGHT_GREEN);
+                            name = name.color(Color32::GREEN);
                         } else if let Some(p) = state.player_checker.check_player_steamid(steamid) {
                             name = name.color(p.player_type.color(ui));
                         }
@@ -314,11 +314,12 @@ pub fn render_kills(ui: &mut Ui, state: &mut State) {
                         ui.label(&kill.killer_name);
                     }
 
-                    ui.label(format!(
-                        " with {}{}",
-                        kill.weapon,
-                        if kill.crit { " (crit)" } else { "" },
-                    ));
+                    ui.label(format!("with"));
+                    let mut text = RichText::new(&kill.weapon);
+                    if kill.crit {
+                        text = text.color(Color32::YELLOW);
+                    }
+                    ui.label(text);
                 });
             }
         },

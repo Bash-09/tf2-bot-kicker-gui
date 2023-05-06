@@ -51,6 +51,7 @@ impl CommandManager {
     }
 
     pub fn try_connect(&mut self) -> Result<(), rcon::Error> {
+        log::debug!("Attempting to reconnect to RCon");
         let mut connected = Ok(());
         self.runtime.block_on(async {
             match Connection::connect("127.0.0.1:27015", &self.password).await {
@@ -63,6 +64,12 @@ impl CommandManager {
                 }
             }
         });
+
+        match &connected {
+            Ok(_) => log::debug!("RCon successfully connected"),
+            Err(e) => log::debug!("RCon failed to connect: {:?}", e),
+        }
+
         connected
     }
 
@@ -73,7 +80,6 @@ impl CommandManager {
         }
 
         log::debug!("Running command \"{}\"", command);
-
         self.runtime.block_on(async {
             if let Some(rcon) = &mut self.rcon {
                 out = Some(rcon.cmd(command).await);

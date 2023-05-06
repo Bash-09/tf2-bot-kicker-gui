@@ -22,29 +22,29 @@ impl LogWatcher {
     /// Internally called by [use_directory]
     pub fn register(filename: &str) -> Result<LogWatcher, io::Error> {
         let f = match File::open(filename) {
-            Ok(x) => x,
-            Err(err) => match err.kind() {
-                io::ErrorKind::NotFound => {
-                    // TODO: Use egui::containers::Window or something to display an error dialog box with this message
-                    // Alternatively, check the TF2 launch options and, if they're good, just create the file and proceed
-                    log::error!("\nError: console.log does not exist in the tf directory.");
-                    log::error!("Please read the \"Settings and Configuration\" section of the README.md file.");
-                    log::error!("You need to add \"-condebug\" to your TF2 launch options and then launch the game once before retrying.");
-                    log::error!("You will also need to add \"-conclearlog\" and \"-usercon\" to your TF2 launch options for other functionality.\n");
-                    return Err(err);
-                }
-                _ => return Err(err),
-            },
+            Ok(x) => {
+                log::debug!("Successfully opened file {}", filename);
+                x
+            }
+            Err(err) => {
+                log::error!("Failed to open file {}: {}", filename, err);
+                return Err(err);
+            }
         };
 
         let metadata = match f.metadata() {
             Ok(x) => x,
-            Err(err) => return Err(err),
+            Err(err) => {
+                log::error!("Failed to get file metadata: {}", err);
+                return Err(err);
+            }
         };
 
         let mut reader = BufReader::new(f);
         let pos = metadata.len();
-        reader.seek(SeekFrom::Start(pos)).unwrap();
+        if let Err(e) = reader.seek(SeekFrom::Start(pos)) {
+            log::error!("Failed to seek in file: {}", e);
+        }
         Ok(LogWatcher {
             filename: filename.to_string(),
             pos,

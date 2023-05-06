@@ -39,7 +39,11 @@ use version::VersionResponse;
 use wgpu_app::utils::persistent_window::{PersistentWindow, PersistentWindowManager};
 
 fn main() {
-    env_logger::init();
+    env_logger::Builder::from_default_env()
+        .filter_module("wgpu_core", log::LevelFilter::Warn)
+        .filter_module("naga::front", log::LevelFilter::Warn)
+        .filter_module("naga", log::LevelFilter::Warn)
+        .init();
 
     let app = TF2BotKicker::new();
 
@@ -237,6 +241,7 @@ impl wgpu_app::Application for TF2BotKicker {
         if !state.settings.paused {
             if state.kick_timer.update() {
                 if state.settings.kick_bots {
+                    log::debug!("Attempting to kick bots");
                     state.server.kick_players_of_type(
                         &state.settings,
                         &mut state.io,
@@ -245,6 +250,7 @@ impl wgpu_app::Application for TF2BotKicker {
                 }
 
                 if state.settings.kick_cheaters {
+                    log::debug!("Attempting to kick cheaters");
                     state.server.kick_players_of_type(
                         &state.settings,
                         &mut state.io,
