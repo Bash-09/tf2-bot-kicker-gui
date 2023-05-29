@@ -1,4 +1,7 @@
+use std::time::Duration;
+
 use crossbeam_channel::Receiver;
+use crossbeam_channel::RecvTimeoutError;
 use crossbeam_channel::Sender;
 use crossbeam_channel::TryRecvError;
 use regex::Regex;
@@ -231,10 +234,10 @@ impl IOThread {
 
     /// Get the next queued message or None.
     fn next_message(&mut self) -> Option<IORequest> {
-        match self.receiver.try_recv() {
+        match self.receiver.recv_timeout(Duration::from_millis(50)) {
             Ok(request) => Some(request),
-            Err(TryRecvError::Empty) => None,
-            Err(TryRecvError::Disconnected) => {
+            Err(RecvTimeoutError::Timeout) => None,
+            Err(RecvTimeoutError::Disconnected) => {
                 panic!("Lost connection to main thread, shutting down.")
             }
         }
