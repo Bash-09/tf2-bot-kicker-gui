@@ -63,7 +63,7 @@ pub struct Player {
     pub player_type: PlayerType,
     pub notes: String,
 
-    pub accounted: bool,
+    pub accounted: u8,
     pub stolen_name: bool,
     pub common_name: bool,
 
@@ -203,9 +203,10 @@ impl Player {
                 }
             }
 
-            if let Some(Ok(account_info)) = &self.account_info {
-                ui.hyperlink_to("Visit profile", &account_info.summary.profileurl);
-            }
+            ui.hyperlink_to(
+                "Visit profile",
+                format!("https://steamcommunity.com/profiles/{}", &self.steamid64),
+            );
 
             // Other actions button
             if allow_kick
@@ -440,7 +441,7 @@ pub fn create_demo_player(name: String, steamid32: String, team: Team) -> Player
         player_type: PlayerType::Player,
         notes: String::new(),
 
-        accounted: true,
+        accounted: 0,
         stolen_name: false,
         common_name: false,
 

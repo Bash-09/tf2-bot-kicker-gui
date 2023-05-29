@@ -212,7 +212,7 @@ impl State {
             p.userid = status.userid;
             p.time = status.time;
             p.state = status.state;
-            p.accounted = true;
+            p.accounted = 0;
 
         //         p.stolen_name = stolen_name;
         //         if p.name != name {
@@ -246,7 +246,7 @@ impl State {
                 state: status.state,
                 player_type: PlayerType::Player,
                 notes: String::new(),
-                accounted: true,
+                accounted: 0,
                 stolen_name: false,
                 //                stolen_name,
                 common_name: false,
@@ -305,7 +305,7 @@ impl State {
     fn handle_lobby(&mut self, lobby: LobbyLine) {
         if let Some(p) = self.server.get_player_mut(&lobby.steamid) {
             p.team = lobby.team;
-            p.accounted = true;
+            p.accounted = 0;
         }
     }
 

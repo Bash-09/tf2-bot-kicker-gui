@@ -24,6 +24,7 @@ use super::settings::Settings;
 pub const COM_STATUS: &str = "status";
 pub const COM_LOBBY: &str = "tf_lobby_debug";
 const RINGBUFFER_LEN: usize = 48;
+pub const ACCOUNTED_LIMIT: u8 = 2;
 
 pub struct Server {
     players: HashMap<String, Player>,
@@ -138,7 +139,7 @@ impl Server {
         }
 
         for p in self.players.values() {
-            if p.state != PlayerState::Active || !p.accounted || p.player_type != player_type {
+            if p.state != PlayerState::Active || p.player_type != player_type {
                 continue;
             }
             match self.players.get(&settings.user) {
@@ -165,7 +166,7 @@ impl Server {
         log::debug!("Refreshing server.");
 
         for p in self.players.values_mut() {
-            p.accounted = false;
+            p.accounted += 1;
         }
     }
 
@@ -173,14 +174,14 @@ impl Server {
     /// (This method will be called automatically in a rexes command)
     pub fn prune(&mut self) {
         'outer: for (_, p) in self.players.drain_filter(|_, v| {
-            if !v.accounted && v.player_type == PlayerType::Bot {
+            if v.accounted > ACCOUNTED_LIMIT && v.player_type == PlayerType::Bot {
                 log::info!("Bot disconnected: {}", v.name);
             }
-            if !v.accounted {
+            if v.accounted > ACCOUNTED_LIMIT {
                 log::debug!("Player Pruned: {}", v.name);
             }
 
-            !v.accounted
+            v.accounted > ACCOUNTED_LIMIT
         }) {
             log::info!("Pruning player {}", &p.name);
             for prev in self.previous_players.inner() {
