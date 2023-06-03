@@ -220,6 +220,7 @@ impl IOThread {
                 self.send_message(IOResponse::NoRCON(e));
             }
             Ok(resp) => {
+                self.send_message(IOResponse::RCONConnected);
                 for l in resp.lines() {
                     // Match lobby command
                     if let Some(caps) = self.regex_lobby.captures(l) {
