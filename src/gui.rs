@@ -1,13 +1,14 @@
 use std::{fmt::Display, ops::RangeInclusive};
 
 use clipboard::{ClipboardContext, ClipboardProvider};
-use egui::{Color32, Id, Label, RichText, Separator, Ui};
+use egui::{gui_zoom, Color32, Id, Label, RichText, Separator, Ui};
 use egui_dock::Tree;
 use serde::{Deserialize, Serialize};
 use wgpu_app::utils::persistent_window::PersistentWindow;
 
 use crate::{
     io::{command_manager::CommandManager, IORequest},
+    player_checker::PlayerRecord,
     server::player::{Player, PlayerType, Team, UserAction},
     state::State,
     steamapi,
@@ -15,7 +16,8 @@ use crate::{
 };
 
 use self::{
-    chat_window::view_chat_window, player_windows::saved_players_window,
+    chat_window::view_chat_window,
+    player_windows::{edit_player_window, saved_players_window},
     regex_windows::view_regexes_window,
 };
 
@@ -86,14 +88,23 @@ pub fn render_top_panel(gui_ctx: &egui::Context, state: &mut State, gui_tree: &m
 
             // Import Regexes and SteamIDs
             ui.menu_button("Import", |ui| {
+                if ui.button("Import playlist").clicked() {
+                    if let Err(e) = state.player_checker.import_players() {
+                        state.new_persistent_windows.push(create_dialog_box(
+                            String::from("Could not import playerlist"),
+                            format!("{:?}", e),
+                        ));
+                    }
+                }
+
                 let mut import_list: Option<PlayerType> = None;
-                if ui.button("Import SteamIDs as Bots").clicked() {
+                if ui.button("Import Bots").clicked() {
                     import_list = Some(PlayerType::Bot);
                 }
-                if ui.button("Import SteamIDs as Cheaters").clicked() {
+                if ui.button("Import Cheaters").clicked() {
                     import_list = Some(PlayerType::Cheater);
                 }
-                if ui.button("Import SteamIDs as Suspicious").clicked() {
+                if ui.button("Import Suspicious").clicked() {
                     import_list = Some(PlayerType::Suspicious);
                 }
 
@@ -260,7 +271,22 @@ pub fn render_chat(ui: &mut Ui, state: &mut State) {
                             name = name.color(p.player_type.color(ui));
                         }
                         if ui.selectable_label(false, name).clicked() {
-                            // TODO - Open player thing on click
+                            let record = if let Some(player) =
+                                state.server.get_players().get(steamid)
+                            {
+                                player.get_record()
+                            } else if let Some(player) = state.player_checker.players.get(steamid) {
+                                player.clone()
+                            } else {
+                                PlayerRecord {
+                                    steamid: steamid.clone(),
+                                    player_type: PlayerType::Player,
+                                    notes: String::new(),
+                                }
+                            };
+                            state
+                                .new_persistent_windows
+                                .push(edit_player_window(record));
                         }
                     } else {
                         ui.label(&msg.player_name);
@@ -292,7 +318,23 @@ pub fn render_kills(ui: &mut Ui, state: &mut State) {
                             name = name.color(p.player_type.color(ui));
                         }
                         if ui.selectable_label(false, name).clicked() {
-                            // TODO - Open player thing on click
+                            // Open player editor on click
+                            let record = if let Some(player) =
+                                state.server.get_players().get(steamid)
+                            {
+                                player.get_record()
+                            } else if let Some(player) = state.player_checker.players.get(steamid) {
+                                player.clone()
+                            } else {
+                                PlayerRecord {
+                                    steamid: steamid.clone(),
+                                    player_type: PlayerType::Player,
+                                    notes: String::new(),
+                                }
+                            };
+                            state
+                                .new_persistent_windows
+                                .push(edit_player_window(record));
                         }
                     } else {
                         ui.label(&kill.killer_name);
@@ -308,7 +350,23 @@ pub fn render_kills(ui: &mut Ui, state: &mut State) {
                             name = name.color(p.player_type.color(ui));
                         }
                         if ui.selectable_label(false, name).clicked() {
-                            // TODO - Open player thing on click
+                            // Open player editor on click
+                            let record = if let Some(player) =
+                                state.server.get_players().get(steamid)
+                            {
+                                player.get_record()
+                            } else if let Some(player) = state.player_checker.players.get(steamid) {
+                                player.clone()
+                            } else {
+                                PlayerRecord {
+                                    steamid: steamid.clone(),
+                                    player_type: PlayerType::Player,
+                                    notes: String::new(),
+                                }
+                            };
+                            state
+                                .new_persistent_windows
+                                .push(edit_player_window(record));
                         }
                     } else {
                         ui.label(&kill.killer_name);

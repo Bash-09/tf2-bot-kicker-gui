@@ -128,7 +128,12 @@ impl PlayerChecker {
             if txt.is_empty() {
                 continue;
             }
-            list.push(Regex::new(txt)?);
+            match Regex::new(txt) {
+                Ok(regx) => list.push(regx),
+                Err(e) => {
+                    log::error!("Error reading regex: {}", e);
+                }
+            }
         }
 
         self.bots_regx.append(&mut list);
@@ -147,6 +152,14 @@ impl PlayerChecker {
             writer.write_all("\n".as_bytes())?;
         }
         writer.flush()?;
+
+        Ok(())
+    }
+
+    pub fn import_players(&mut self) -> Result<(), Box<dyn Error>> {
+        if let Some(pb) = rfd::FileDialog::new().pick_file() {
+            self.read_players(pb)?;
+        }
 
         Ok(())
     }

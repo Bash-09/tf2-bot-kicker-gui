@@ -41,6 +41,7 @@ use wgpu_app::utils::persistent_window::{PersistentWindow, PersistentWindowManag
 fn main() {
     env_logger::Builder::from_default_env()
         .filter_module("wgpu_core", log::LevelFilter::Warn)
+        .filter_module("wgpu_hal", log::LevelFilter::Warn)
         .filter_module("naga::front", log::LevelFilter::Warn)
         .filter_module("naga", log::LevelFilter::Warn)
         .init();
