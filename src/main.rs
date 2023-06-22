@@ -113,7 +113,7 @@ impl wgpu_app::Application for TF2BotKicker {
         // Try to run TF2 if set to
         if self.state.settings.launch_tf2 {
             #[cfg(target_os = "windows")]
-            let command = "\"C:/Program Files (x86)/Steam/steam.exe\"";
+            let command = "C:/Program Files (x86)/Steam/steam.exe";
             #[cfg(not(target_os = "windows"))]
             let command = "steam";
 
