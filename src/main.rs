@@ -1,4 +1,4 @@
-#![feature(hash_drain_filter)]
+#![feature(hash_extract_if)]
 
 extern crate chrono;
 extern crate env_logger;
@@ -112,7 +112,12 @@ impl wgpu_app::Application for TF2BotKicker {
 
         // Try to run TF2 if set to
         if self.state.settings.launch_tf2 {
-            if let Err(e) = std::process::Command::new("steam")
+            #[cfg(target_os = "windows")]
+            let command = "\"C:/Program Files (x86)/Steam/steam.exe\"";
+            #[cfg(not(target_os = "windows"))]
+            let command = "steam";
+
+            if let Err(e) = std::process::Command::new(command)
                 .arg("steam://rungameid/440")
                 .spawn()
             {

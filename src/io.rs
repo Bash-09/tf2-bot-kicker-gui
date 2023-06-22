@@ -3,7 +3,6 @@ use std::time::Duration;
 use crossbeam_channel::Receiver;
 use crossbeam_channel::RecvTimeoutError;
 use crossbeam_channel::Sender;
-use crossbeam_channel::TryRecvError;
 use regex::Regex;
 
 use regexes::LobbyLine;

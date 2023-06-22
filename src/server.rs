@@ -173,7 +173,7 @@ impl Server {
     /// Remove players who aren't present on the server anymore
     /// (This method will be called automatically in a rexes command)
     pub fn prune(&mut self) {
-        'outer: for (_, p) in self.players.drain_filter(|_, v| {
+        'outer: for (_, p) in self.players.extract_if(|_, v| {
             if v.accounted > ACCOUNTED_LIMIT && v.player_type == PlayerType::Bot {
                 log::info!("Bot disconnected: {}", v.name);
             }
