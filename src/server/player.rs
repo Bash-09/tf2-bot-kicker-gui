@@ -7,6 +7,8 @@ use egui_extras::RetainedImage;
 use serde::Serialize;
 use wgpu_app::utils::persistent_window::PersistentWindow;
 
+const ORANGE: Color32 = Color32::from_rgb(255, 165, 0);
+
 use crate::{
     gui::{
         format_time,
@@ -294,12 +296,19 @@ impl Player {
                     let age = Utc::now()
                         .naive_local()
                         .signed_duration_since(NaiveDateTime::from_timestamp(time as i64, 0));
-                    if age.num_days() < (365) {
-                        ui.label(RichText::new("Y").color(Color32::from_rgb(255, 165, 0)));
+                    if age.num_days() < (70) {
+                        ui.label(RichText::new("Y").color(Color32::RED));
+                    } else if age.num_days() < (365) {
+                        ui.label(RichText::new("Y").color(ORANGE));
                     }
                 }
+                if info.summary.communityvisibilitystate == 1 {
+                    ui.label(RichText::new("P").color(Color32::RED));
+                } else if info.summary.communityvisibilitystate == 2 {
+                    ui.label(RichText::new("F").color(Color32::YELLOW));
+                }
             } else if let Some(Err(_)) = &self.account_info {
-                ui.label(RichText::new("P").color(Color32::RED));
+                ui.label(RichText::new("N").color(ORANGE));
             }
 
             // Cheater / Bot / Joining
@@ -358,7 +367,11 @@ impl Player {
                                     ui.label(&format!("Account Age: {} days", days));
                                 }
 
-                                if age.num_days() < (365) {
+                                if age.num_days() < (70) {
+                                    ui.label(
+                                        RichText::new("(Very) Young account").color(Color32::RED),
+                                    );
+                                } else if age.num_days() < (365) {
                                     ui.label(
                                         RichText::new("Young account")
                                             .color(Color32::from_rgb(255, 165, 0)),
@@ -400,7 +413,7 @@ impl Player {
                 }
                 Err(e) => {
                     let string = format!("{}", e);
-                    ui.label(RichText::new("Profile could not be retrieved").color(Color32::RED));
+                    ui.label(RichText::new("No profile could be retrieved").color(ORANGE));
                     if string.contains("missing field `profilestate`") {
                         ui.label("Profile may not be set up.");
                     }
