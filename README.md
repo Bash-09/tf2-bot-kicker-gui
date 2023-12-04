@@ -8,6 +8,12 @@ A (somewhat) cross-platform bot identifier/kicker written in Rust.
 
 ![Demonstration Image](images/demo.png)
 
+# Preface
+
+This project is no longer maintained. It still functions as intended and is a great alternative to TF2BD, however a lot of the later features were never published in a release so I recommend building the application yourself for the best experience.
+
+I'm currently working on the [MAC Client](https://github.com/MegaAntiCheat/client-backend) instead which will eventually offer most of the functionality of this project (though not all) with some additional benefits.
+
 # What it does
 
 This is a program you run alongside TF2 while you play which automatically attempts to identify and vote-kick bots and cheaters on the server you are playing on, and can also send chat messages in-game to alert other players of bots or cheaters joining the server. It does this by maintaining a list of know or previously-seen steamids and checking if the players on the server are on that list, and if that fails it also checks player names against a list of regex rules to identify common bots such as DoesHotter or m4gic. It also features name-stealing detection, however that may not be necessary anymore as Valve has (hopefully) fixed name-stealing for good.
