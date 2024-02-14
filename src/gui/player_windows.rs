@@ -230,6 +230,7 @@ pub fn recent_players_window() -> PersistentWindow<State> {
                                     &state.settings.user,
                                     false,
                                     !state.settings.steamapi_key.is_empty(),
+                                    None
                                 ) {
                                     action = Some((returned_action, player));
                                 }

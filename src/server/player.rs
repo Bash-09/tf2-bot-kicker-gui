@@ -116,6 +116,7 @@ impl Player {
         user: &str,
         allow_kick: bool,
         allow_steamapi: bool,
+        party_color: Option<Color32>,
     ) -> Option<UserAction> {
         static mut CONTEXT_MENU_OPEN: Option<String> = None;
 
@@ -270,6 +271,11 @@ impl Player {
                 self.render_account_info(ui);
                 self.render_notes(ui);
             });
+        }
+
+        // Party Indicator
+        if let Some(col_party) = party_color {
+            ui.label(RichText::new("■").color(col_party));
         }
 
         // Cheater, Bot and Joining labels

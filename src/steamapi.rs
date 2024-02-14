@@ -67,7 +67,7 @@ pub fn create_api_thread(key: String) -> (Sender<String>, AccountInfoReceiver) {
                             let bans = bans.unwrap();
 
                             // Friends
-                            let friends = if summary.communityvisibilitystate != 3 {
+                            let friends = if summary.communityvisibilitystate == 3 {
                                 Some(steam_api::get_friends_list(&steamid, &key))
                             } else {
                                 None
