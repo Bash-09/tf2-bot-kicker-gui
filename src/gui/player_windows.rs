@@ -190,7 +190,7 @@ pub fn edit_player_window(mut record: PlayerRecord) -> PersistentWindow<State> {
 
                 // Render player info if they are in the server
                 if let Some(player) = state.server.get_players().get(&record.steamid) {
-                    player.render_account_info(ui);
+                    player.render_account_info(ui, None);
                 }
             });
 

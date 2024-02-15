@@ -1,9 +1,8 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use std::hash::{DefaultHasher, Hash, Hasher};
-
 use crate::player::{steamid_64_to_32, Player, Steamid32};
 
+// taken from https://sashamaps.net/docs/resources/20-colors/
 const COLOR_PALETTE: [egui::Color32; 21] = [
     egui::Color32::from_rgb(230, 25, 75),
     egui::Color32::from_rgb(60, 180, 75),
@@ -28,9 +27,11 @@ const COLOR_PALETTE: [egui::Color32; 21] = [
     egui::Color32::from_rgb(255, 255, 255),
 ];
 
+/// Structure used to determine which players in the current server are friends
 pub struct Parties{
     players: Vec<Steamid32>,
     friend_connections: HashMap<Steamid32, HashSet<Steamid32>>,
+
     parties: Vec<HashSet<Steamid32>>,
 }
 
@@ -45,16 +46,20 @@ impl Parties {
 
     pub fn clear(&mut self) {
         self.players.clear();
-        //self.friend_connections.clear();
+        self.friend_connections.clear();
         self.parties.clear();
     }
 
+    /// Updates the internal graph of players
     pub fn update(&mut self, player_map: &HashMap<Steamid32, Player>){
+        // Copy over the players
         self.players.clear();
         for p in player_map.keys() {
             self.players.push(p.clone());
         }
 
+        self.friend_connections.clear();
+        // Get friends of each player and add them to the connection map
         for p in player_map.values() {
             if let Some(Ok(acif)) = &p.account_info {
                 if let Some(Ok(friends)) = &acif.friends {
@@ -71,35 +76,51 @@ impl Parties {
         self.find_parties();
     }
 
+    /// Returns color to represent this player's party
+    pub fn get_player_party_color(&self, p: &Player) -> Option<egui::Color32> {
+        for i in 0..self.parties.len(){
+            let party = self.parties.get(i).unwrap();
+            if party.contains(&p.steamid32){
+                return Some(COLOR_PALETTE[(i%COLOR_PALETTE.len()) as usize]);
+            }
+        }
+        None
+    }
+
+    /// Determines the connected components of the player graph (aka. the friend groups)
     fn find_parties(&mut self){
         self.parties.clear();
         if self.players.is_empty() {
             return;
         }
-        let mut remaining_players = self.players.clone();
 
-        let mut handled: HashSet<Steamid32> = HashSet::new();
-        let mut queue: VecDeque<Steamid32> = VecDeque::new();
+        let mut remaining_players = self.players.clone(); // Vec to keep track of unhandled players
+        let mut queue: VecDeque<Steamid32> = VecDeque::new(); // Queue for processing connected players
 
+        // Perform a BFS over the graph to find the components and save them as parties
         while !remaining_players.is_empty() {
-            queue.push_back(remaining_players.pop().unwrap());
+            // Start a new party and add an unhandled player to the queue
+            queue.push_back(remaining_players.first().unwrap().clone());
             let mut party: HashSet<Steamid32> = HashSet::new();
 
             while !queue.is_empty() {
                 let p = queue.pop_front().unwrap();
                 party.insert(p.clone());
-                handled.insert(p.clone());
+                remaining_players.retain(|rp|*rp != p);
                 
                 if let Some(friends) = self.friend_connections.get(&p) {
-                    friends.iter().filter(|f|!handled.contains(f.clone())).for_each(|f|queue.push_back(f.clone()));
+                    // Only push players not in the party into the queue
+                    friends.iter().filter(|f|!party.contains(*f)).for_each(|f|queue.push_back(f.clone()));
                 }
             }
+            // Solo players are not in a party
             if party.len() > 1{
                 self.parties.push(party);
             }
         }
     }
 
+    /// Utility function to add bidirectional friend connections, so private accounts can also be accounted for as long as one of their friends has a public account
     fn add_friend(&mut self, user: &String, friend: &String){
         if let Some(set) = self.friend_connections.get_mut(user){
             set.insert(friend.clone());
@@ -112,19 +133,5 @@ impl Parties {
         } else {
             self.friend_connections.insert(friend.clone(), HashSet::from([user.clone()]));
         }
-    }
-
-    pub fn get_parties(&self) -> &Vec<HashSet<Steamid32>> {
-        &self.parties
-    }
-
-    pub fn get_player_party_color(&self, p: &Player) -> Option<egui::Color32> {
-        for i in 0..self.parties.len(){
-            let party = self.parties.get(i).unwrap();
-            if party.contains(&p.steamid32){
-                return Some(COLOR_PALETTE[(i%COLOR_PALETTE.len()) as usize]);
-            }
-        }
-        None
     }
 }
