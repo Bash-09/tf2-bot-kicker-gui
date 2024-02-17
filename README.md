@@ -38,6 +38,21 @@ net_start
 
 Next time you play TF2 you will just need to start the program and it will do everything else for you!
 
+# Building
+
+Install Rust: https://www.rust-lang.org/tools/install
+
+May need to enable rust nightly: `rustup default nightly`
+
+On Linux some packages will need to be installed (commands are provided for Ubuntu, other distros will have to figure out how to install the equivalent packages):
+```
+wget http://archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.0g-2ubuntu4_amd64.deb
+sudo dpkg -i libssl1.1_1.1.0g-2ubuntu4_amd64.deb
+sudo apt-get install libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libgtk-3-dev libglib2.0-dev
+```
+
+The program can then be built and run with `cargo run --release`
+
 # Settings and Configuration
 
 To reset your settings, delete the `settings.json` file in the `cfg` folder.
@@ -67,12 +82,6 @@ Any saved regexes or players can be accessed/added/editted/deleted from the `Sav
 ## Account identification
 
 A list of accounts is stored in `cfg/playerlist.json` containing the SteamID, player type (Player/Bot/Cheater) and any recorded notes for that account. When players join the server their steamid is matched against this list to determine if they are a bot or cheater and will take appropriate action (send chat messages, kick, etc). If they are not a know account their name will be checked against a list of regexes in case they have a common bot name (e.g. DoesHotter).
-
-# Building
-
-Enable rust nightly: `rustup default nightly`
-
-This program should then build without issue through Cargo, on Linux some libraries may need to be installed.
 
 # How it works
  
