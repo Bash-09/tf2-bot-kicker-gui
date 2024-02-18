@@ -116,6 +116,7 @@ impl Player {
         user: &str,
         allow_kick: bool,
         allow_steamapi: bool,
+        party_color: Option<Color32>,
     ) -> Option<UserAction> {
         static mut CONTEXT_MENU_OPEN: Option<String> = None;
 
@@ -267,9 +268,14 @@ impl Player {
         // information to show (i.e. notes or stolen name notification)
         if (allow_steamapi || !self.notes.is_empty() || self.stolen_name) && !menu_open {
             header.response.on_hover_ui(|ui| {
-                self.render_account_info(ui);
+                self.render_account_info(ui, party_color);
                 self.render_notes(ui);
             });
+        }
+
+        // Party Indicator
+        if let Some(col_party) = party_color {
+            ui.label(RichText::new("■").color(col_party));
         }
 
         // Cheater, Bot and Joining labels
@@ -324,7 +330,7 @@ impl Player {
     }
 
     /// Renders a view of the player's steam account info
-    pub fn render_account_info(&self, ui: &mut Ui) {
+    pub fn render_account_info(&self, ui: &mut Ui, party_color: Option<Color32>) {
         if let Some(info_request) = &self.account_info {
             match info_request {
                 Ok(info) => {
@@ -406,6 +412,13 @@ impl Player {
                                         bans.DaysSinceLastBan
                                     ))
                                     .color(Color32::RED),
+                                );
+                            }
+
+                            if let Some(c) = party_color {
+                                ui.label(
+                                    RichText::new("■ This player has friends in the server")
+                                    .color(c),
                                 );
                             }
                         });
