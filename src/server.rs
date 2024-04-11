@@ -6,6 +6,9 @@ pub mod player;
 use player::Player;
 use player::PlayerState;
 
+pub mod parties;
+use parties::Parties;
+
 use crate::io::command_manager::CommandManager;
 use crate::io::command_manager::KickReason;
 use crate::io::regexes::ChatMessage;
@@ -33,6 +36,7 @@ pub struct Server {
     pub new_connections: Vec<String>,
     pub pending_lookup: Vec<String>,
     previous_players: RingBuffer<Player>,
+    parties: Parties,
 }
 
 impl Server {
@@ -44,6 +48,7 @@ impl Server {
             new_connections: Vec::new(),
             pending_lookup: Vec::new(),
             previous_players: RingBuffer::new(RINGBUFFER_LEN),
+            parties: Parties::new(),
         }
     }
 
@@ -61,6 +66,7 @@ impl Server {
         }
 
         self.new_connections.clear();
+        self.parties.clear();
     }
 
     pub fn get_players(&self) -> &HashMap<String, Player> {
@@ -69,6 +75,10 @@ impl Server {
 
     pub fn get_previous_players(&self) -> &RingBuffer<Player> {
         &self.previous_players
+    }
+
+    pub fn get_player_party_color(&self, p: &Player) -> Option<egui::Color32> {
+        self.parties.get_player_party_color(p)
     }
 
     pub fn get_player_mut(&mut self, steamid: &Steamid32) -> Option<&mut Player> {
@@ -168,6 +178,8 @@ impl Server {
         for p in self.players.values_mut() {
             p.accounted += 1;
         }
+
+        self.parties.update(&self.players);
     }
 
     /// Remove players who aren't present on the server anymore
