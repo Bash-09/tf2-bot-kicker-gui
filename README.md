@@ -2,6 +2,8 @@
   <img src="images/logo_smol.png">
 </p>
 
+# This project is no longer maintained and has been superceeded by [TF2 Monitor](https://github.com/Bash-09/TF2-Monitor)
+
 # TF2 Bot Kicker by Bash
 
 A (somewhat) cross-platform bot identifier/kicker written in Rust.
